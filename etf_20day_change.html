@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  腾讯行情接口文档（实测整理，供复用）
+  ============================================================================
+
+  一、实时行情接口（批量，ETF/股票/指数通用）
+  ----------------------------------------------------------------------------
+  URL:  https://qt.gtimg.cn/q=<symbol1>,<symbol2>,...
+    · symbol 带市场前缀：沪市 sh + 代码（如 sh515220），深市 sz + 代码（如 sz159915）
+    · 一次请求可逗号分隔多个标的
+    · 【CORS】不支持 fetch，需用 <script> 标签注入（JSONP 风格），
+      返回形如 v_sh515220="1~名称~515220~现价~..."，挂到 window 全局变量
+    · 【超时】建议设 3-4 秒兜底，script onload 后读取 window['v_'+symbol]
+
+  返回字段（按 ~ 分隔，0-based 索引）：
+    f[0]  未知标识（忽略）
+    f[1]  名称
+    f[2]  代码
+    f[3]  最新价（现价）
+    f[4]  昨收（计算当日涨跌幅的基准）
+    f[5]  今开
+    f[6]  成交量（手）
+    f[7]  外盘
+    f[8]  内盘
+    f[9..28]  买一~买五/卖一~卖五（价量交替）
+    f[30] 合并时间串 "YYYYMMDDHHMMSS"
+    f[31] 涨跌额（最新价 - 昨收）
+    f[32] 当日涨跌幅（%）
+    f[33] 当日最高
+    f[34] 当日最低
+    f[35] "现价/成交量/成交额" 复合串
+    f[37] 成交额（万元）
+    f[41] 最高（含竞价）
+    f[42] 最低（含竞价）
+    f[43] 振幅（%）
+    f[44] 流通市值（亿）
+    f[45] 总市值（亿）
+    f[47] 52周最高
+    f[48] 52周最低
+    f[49] 换手率（%）
+    f[57] 成交额（万元，高精度）
+    f[61] 类型标识：GP-A=A股, ETF=基金, ZS=指数
+    f[62] 市盈率(动)
+    f[63] 市净率
+    f[70] ★ 20日涨跌幅（%，腾讯预计算，与日K前复权计算结果一致）
+    f[71]年初至今涨跌幅（%）
+    f[78] ★ IOPV（基金份额参考净值，仅 ETF 有值，盘中每 15 秒更新；
+                 A 股 ETF 随标的指数实时波动，跨境 ETF 境外闭市时 ≈ T-1 净值）
+    f[81] T-1 单位净值 NAV（基金上一交易日单位净值，非实时 IOPV）
+    f[85] 未知（接近现价，疑似集合竞价价）
+    f[86] 主力净流入额
+
+  关键字段速查：
+    当日涨跌幅 → f[32] 或 (f[3]-f[4])/f[4]*100
+    20日涨跌幅 → f[70]（直接取，无需拉日K）
+    IOPV       → f[78]（仅 ETF，盘中实时更新）
+    T-1 净值   → f[81]（上一交易日单位净值，非实时）
+    溢价率     → (f[3] - f[78]) / f[78] * 100（仅 ETF，用实时 IOPV 计算）
+    注：实时接口【无 MA20 字段】，算 BIAS20 必须拉日K
+
+  二、日K线接口（单标的，前复权）
+  ----------------------------------------------------------------------------
+  URL:  https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=<symbol>,day,,,N,qfq
+    · 必须带 qfq 参数（前复权），否则返回 {"code":1,"msg":"bad params"}
+    · N = 拉取根数（算20日涨跌幅/MA20 需 ≥21）
+    · 【CORS】支持 fetch，可直接调用
+    · 返回 JSON: { data: { <symbol>: { qfqday: [[date,open,close,high,low,vol],...] } } }
+    · 无分红的标的返回 day 字段（不复权），有分红返回 qfqday（前复权）
+    · 代码兼容：sd.qfqday || sd.day
+
+  日K字段（每根数组）：
+    [0] 日期 "YYYY-MM-DD"
+    [1] 开盘价
+    [2] 收盘价  ← 算涨跌幅/MA20 用此字段
+    [3] 最高价
+    [4] 最低价
+    [5] 成交量
+
+  计算：
+    20日涨跌幅 = (最新价 - days[N-21].close) / days[N-21].close * 100
+    MA20       = mean(days[N-20..N-1].close)  （最近20根K线收盘价均值）
+    BIAS20     = (最新价 - MA20) / MA20 * 100
+
+  三、分钟K线接口（单标的，本页未用，备查）
+  ----------------------------------------------------------------------------
+  URL:  https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=<symbol>,<period>,,N
+    · period: m1 / m5 / m15 / m30
+    · 【CORS】支持 fetch
+    · 返回: { data: { <symbol>: { <period>: [[time,open,close,high,low,vol,{},amount],...] } } }
+    · time 格式 "YYYYMMDDHHMM"
+
+  四、代码前缀规则
+  ----------------------------------------------------------------------------
+    5 开头（51/56/58）→ 沪市 sh（如 sh515220, sh588000, sh518880）
+    1 开头（15/16）   → 深市 sz（如 sz159915, sz162411）
+
+  ============================================================================
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETF 20日涨跌幅看板</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.5.38/dist/vue.global.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .up { color: #dc2626; }   /* 红涨 */
+  .down { color: #16a34a; } /* 绿跌 */
+  .flat { color: #6b7280; }
+  table { border-collapse: separate; border-spacing: 0; }
+  /* 绝对动量择时剔除标记：20日涨跌幅 < +1% 的行加淡绿底纹 */
+  .weed-out { background-color: #ecfdf5; }        /* emerald-50 */
+  .weed-out:hover { background-color: #d1fae5; }  /* emerald-100 */
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+<div id="app" class="max-w-5xl mx-auto p-4 sm:p-6">
+  <!-- 标题栏 -->
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold">ETF 涨跌幅 &amp; IOPV溢价看板</h1>
+      <p class="text-xs text-slate-500 mt-1">数据源：腾讯行情 · 共 {{ etfList.length }} 只</p>
+    </div>
+    <button @click="manualRefresh" :disabled="loading"
+      class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors shadow-sm">
+      <span v-if="loading">加载中…</span>
+      <span v-else>🔄 刷新</span>
+    </button>
+  </div>
+
+  <!-- 模式切换 + 最后更新时间 -->
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <div class="inline-flex rounded-lg border border-slate-200 bg-white overflow-hidden text-xs sm:text-sm">
+      <button @click="switchMode('f70')"
+        :class="mode==='f70' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'"
+        class="px-3 py-1.5 font-medium transition-colors border-r border-slate-200">
+        实时 f70
+      </button>
+      <button @click="switchMode('kline')"
+        :class="mode==='kline' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'"
+        class="px-3 py-1.5 font-medium transition-colors">
+        日K线（前复权）
+      </button>
+    </div>
+    <div class="text-xs text-slate-500">
+      最后更新：<span v-if="lastUpdate">{{ lastUpdate }}</span><span v-else class="text-slate-400">—</span>
+    </div>
+  </div>
+
+  <!-- 表格（横向滚动，列顺序随屏幕宽度切换） -->
+  <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm whitespace-nowrap">
+      <thead class="bg-slate-100 text-slate-600">
+        <tr>
+          <th v-for="col in columns" :key="col.key"
+              :class="[col.align === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:bg-slate-200' : '']"
+              class="px-4 py-3 font-medium"
+              @click="col.sortable && (sortBy = col.sortKey)">
+            {{ col.label }} <span v-if="col.sortable && sortBy===col.sortKey">↕</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-if="loading && rows.length===0">
+          <td :colspan="columns.length" class="text-center py-12 text-slate-400">正在从腾讯拉取行情数据…</td>
+        </tr>
+        <tr v-else-if="!loading && rows.length===0">
+          <td :colspan="columns.length" class="text-center py-12 text-slate-400">暂无数据，点击右上角「刷新」</td>
+        </tr>
+        <tr v-for="r in sortedRows" :key="r.code"
+            :class="['border-t border-slate-100 transition-colors', isWeedOut(r) ? 'weed-out' : 'hover:bg-slate-50']">
+          <td v-for="col in columns" :key="col.key"
+              :class="[col.align === 'right' ? 'text-right' : 'text-left', col.mono ? 'font-mono' : '', cellColor(col, r)]"
+              class="px-4 py-3">
+            <template v-if="col.key === 'd20Pct' && r.error && r[col.key] === null">
+              <span class="text-slate-400 font-normal text-xs">获取失败</span>
+            </template>
+            <template v-else>
+              <span :class="col.bold ? 'font-semibold' : ''">{{ cellText(col, r) }}</span>
+            </template>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 错误提示 -->
+  <div v-if="errorMsg" class="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+    {{ errorMsg }}
+  </div>
+
+  <!-- 非交易时段提示 -->
+  <div v-if="notice" class="mt-3 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+    {{ notice }}
+  </div>
+
+  <!-- 说明 -->
+  <div class="mt-4 text-xs text-slate-400 leading-relaxed">
+    <p>· <b>实时 f70 模式（默认）</b>：20日涨跌幅直接取腾讯实时接口 f70 字段，一次请求拿全部，速度快</p>
+    <p>· <b>日K线模式</b>：拉前复权日K（qfq），取倒数第21根（20交易日前）收盘价与最新价计算 20 日涨跌幅，可作交叉验证</p>
+    <p>· <b>BIAS20</b>（仅日K线模式）：乖离率 = (最新价 − MA20) / MA20 × 100%，MA20 为最近20日前复权收盘价均值</p>
+    <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15</p>
+    <p>· IOPV（腾讯 f78，仅 ETF 有值，盘中每 15 秒更新）用于计算溢价率 = (现价 − IOPV) / IOPV × 100%，不再单独展示</p>
+    <p>· <b>买一/卖一金额</b>：取腾讯实时盘口买一价×买一量、卖一价×卖一量（1手=100份），金额 = 价 × 量 × 100，以"万"为单位显示</p>
+    <p>· 当日涨跌幅、最新价、IOPV 均来自腾讯实时行情；默认按 20 日涨跌幅降序，点击表头可切换排序</p>
+    <p>· <b>淡绿底纹</b>：20日涨跌幅 &lt; +1% 的标的视为绝对动量无趋势，予以剔除标记（仅视觉提示，不改变排序）</p>
+    <p>· <b>刷新策略</b>：不做定时自动刷新；首次打开、切回本页（tab）时自动提取数据；手动「刷新」仅在交易时段（周一至周五 上午 9:30–11:30、下午 13:00–15:00）才会重新请求远程数据，非交易时段按刷新只提示、不重复拉取</p>
+    <p>· 手机端表格可横向滚动，列顺序与桌面端一致</p>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+// 跟踪的 ETF 列表（纯代码，无市场前缀）
+const ETF_CODES = [
+  '515220', '159866', '513110', '162411', '159915',
+  '159698', '159980', '159981', '159985', '588000', '513050', '518880',
+];
+
+// 代码 → 带市场前缀（5开头=沪市sh，1开头=深市sz）
+function toFullSymbol(code) {
+  return (code.startsWith('5') ? 'sh' : 'sz') + code;
+}
+
+// 交易时段判断：A股周一至周五，上午 9:30–11:30、下午 13:00–15:00（分钟计：570–690、780–900）
+function isTradingTime(now = new Date()) {
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;   // 周末休市
+  const m = now.getHours() * 60 + now.getMinutes();
+  return (m >= 570 && m < 690) || (m >= 780 && m < 900);
+}
+
+// 列配置（key 对应 row 字段）
+const ALL_COLUMNS = [
+  { key: 'code',       label: '代码',         align: 'left',  mono: true },
+  { key: 'name',       label: '名称',         align: 'left' },
+  { key: 'dailyPct',   label: '当日涨跌幅',   align: 'right', mono: true, pct: true, sortable: true, sortKey: 'daily' },
+  { key: 'd20Pct',     label: '20日涨跌幅',   align: 'right', mono: true, pct: true, bold: true, sortable: true, sortKey: 'd20' },
+  { key: 'premium',    label: '溢价率',       align: 'right', mono: true, pct: true, sortable: true, sortKey: 'prem' },
+  { key: 'bias20',     label: 'BIAS20',       align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'bias' },
+  { key: 'target10',   label: '10%目标价',    align: 'right', mono: true, klineOnly: true, format: v => v?.toFixed(3) },
+  { key: 'target15',   label: '15%目标价',    align: 'right', mono: true, klineOnly: true, format: v => v?.toFixed(3) },
+  { key: 'price',      label: '最新价',       align: 'right', mono: true, format: v => v?.toFixed(3) },
+  { key: 'bidAmt',     label: '买一金额',     align: 'right', mono: true, sortable: true, sortKey: 'bid', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
+  { key: 'askAmt',     label: '卖一金额',     align: 'right', mono: true, sortable: true, sortKey: 'ask', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
+];
+// 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、溢价率、BIAS20、10%目标价、15%目标价、最新价、买一金额、卖一金额
+const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt'];
+const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt'];
+
+createApp({
+  setup() {
+    const etfList = reactive(ETF_CODES.map(code => ({
+      code,
+      full: toFullSymbol(code),
+      name: null,
+      price: null,
+      dailyPct: null,
+      d20Pct: null,
+      d20Fallback: null,   // 腾讯 f70 兜底
+      ma20: null,           // 20日均线（仅 kline 模式）
+      bias20: null,         // BIAS20 乖离率 = (price - ma20) / ma20 * 100（仅 kline 模式）
+      target10: null,       // BIAS20=10% 时的目标价 = ma20 * 1.1（仅 kline 模式）
+      target15: null,       // BIAS20=15% 时的目标价 = ma20 * 1.15（仅 kline 模式）
+      iopv: null,           // f78 IOPV（基金份额参考净值，盘中实时更新；保留用于算溢价率，不再单独展示）
+      premium: null,        // 溢价率 = (price - iopv) / iopv
+      bidAmt: null,         // 买一金额 = 买一价 × 买一量 × 100（元）
+      askAmt: null,         // 卖一金额 = 卖一价 × 卖一量 × 100（元）
+      error: false,
+    })));
+    const rows = ref(etfList);
+    const loading = ref(false);
+    const lastUpdate = ref('');
+    const errorMsg = ref('');
+    const notice = ref(''); // 非交易时段按「刷新」时的提示
+    const sortBy = ref('d20'); // 'd20' | 'daily' | 'prem'
+    const mode = ref('f70');  // 'f70'（实时，默认） | 'kline'（日K线计算）
+    const isMobile = ref(window.matchMedia('(max-width: 767px)').matches);
+
+    // 监听屏幕宽度变化，切换列顺序
+    if (window.matchMedia) {
+      const mq = window.matchMedia('(max-width: 767px)');
+      const handler = e => { isMobile.value = e.matches; };
+      // 兼容 Safari 旧版
+      if (mq.addEventListener) mq.addEventListener('change', handler);
+      else if (mq.addListener) mq.addListener(handler);
+    }
+
+    // 列顺序：移动端优先展示 20日涨跌幅、IOPV、溢价率；f70 模式隐藏 BIAS20（需日K）
+    const columns = computed(() => {
+      const order = isMobile.value ? MOBILE_ORDER : DESKTOP_ORDER;
+      return order
+        .map(k => ALL_COLUMNS.find(c => c.key === k))
+        .filter(Boolean)
+        .filter(c => !(c.klineOnly && mode.value !== 'kline'));
+    });
+
+    function switchMode(m) {
+      if (mode.value === m || loading.value) return;
+      mode.value = m;
+      refresh();
+    }
+
+    const sortedRows = computed(() => {
+      const arr = [...rows.value];
+      const keyMap = { d20: 'd20Pct', daily: 'dailyPct', prem: 'premium', bias: 'bias20', bid: 'bidAmt', ask: 'askAmt' };
+      const key = keyMap[sortBy.value] || 'd20Pct';
+      // 降序：有效值在前，null 在后
+      arr.sort((a, b) => {
+        const va = a[key], vb = b[key];
+        if (va === null && vb === null) return 0;
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        return vb - va;
+      });
+      return arr;
+    });
+
+    function pctClass(pct) {
+      if (pct === null) return 'flat';
+      if (pct > 0) return 'up';
+      if (pct < 0) return 'down';
+      return 'flat';
+    }
+    function fmtPct(pct) {
+      const sign = pct > 0 ? '+' : '';
+      return sign + pct.toFixed(2) + '%';
+    }
+
+    // 单元格文本
+    function cellText(col, r) {
+      const v = r[col.key];
+      if (v === null || v === undefined) return '—';
+      if (col.pct) return fmtPct(v);
+      if (col.format) return col.format(v);
+      return v;
+    }
+    // 单元格颜色（涨跌幅类列用红绿，其余默认）
+    function cellColor(col, r) {
+      if (col.pct) return pctClass(r[col.key]);
+      return '';
+    }
+    // 绝对动量择时剔除：20日涨跌幅 < +1% 的标的视为无趋势，加淡绿底纹标记
+    function isWeedOut(r) {
+      return r.d20Pct !== null && r.d20Pct !== undefined && r.d20Pct < 1;
+    }
+
+    // ---------- 实时价：script 注入 qt.gtimg.cn（绕过 CORS） ----------
+    function fetchRealtimeQuotes() {
+      return new Promise((resolve) => {
+        const all = ETF_CODES.map(toFullSymbol).join(',');
+        const s = document.createElement('script');
+        let done = false;
+        const finish = () => {
+          if (done) return; done = true;
+          const result = {};
+          for (const code of ETF_CODES) {
+            const full = toFullSymbol(code);
+            const raw = window['v_' + full];
+            if (!raw) { result[code] = null; continue; }
+            // 兼容 "v_xxx=\"...\"" 或裸串
+            const m = String(raw).match(/v_(?:sh|sz)\d+="([^"]*)"/);
+            const payload = m && m[1] ? m[1] : String(raw);
+            const f = payload.split('~');
+            if (f.length < 35) { result[code] = null; continue; }
+            const price = parseFloat(f[3]);
+            const prev = parseFloat(f[4]);
+            const name = f[1] || code;
+            const dailyPct = prev ? (price - prev) / prev * 100 : 0;
+            // f[78] = IOPV（基金份额参考净值，仅 ETF 有值，盘中每 15 秒更新）
+            const iopvRaw = f[78] || '';
+            const iopv = iopvRaw ? parseFloat(iopvRaw) : null;
+            // f[70] = 20日涨跌幅（腾讯预计算，作为 fqkline 失败时的兜底）
+            const d70Raw = f[70] || '';
+            const d70 = d70Raw ? parseFloat(d70Raw) : null;
+            // 溢价率 = (现价 - IOPV) / IOPV
+            const premium = (iopv && iopv > 0 && price > 0) ? (price - iopv) / iopv * 100 : null;
+            // 买一/卖一：f[9]=买一价, f[10]=买一量(手), f[19]=卖一价, f[20]=卖一量(手)
+            // 金额 = 价 × 量 × 100（1手=100份）
+            const bidPrice = parseFloat(f[9]);
+            const bidVol = parseFloat(f[10]);
+            const askPrice = parseFloat(f[19]);
+            const askVol = parseFloat(f[20]);
+            const bidAmt = (bidPrice > 0 && bidVol > 0) ? bidPrice * bidVol * 100 : null;
+            const askAmt = (askPrice > 0 && askVol > 0) ? askPrice * askVol * 100 : null;
+            result[code] = { name, price, dailyPct, iopv, premium, d70, bidAmt, askAmt };
+            delete window['v_' + full]; // 清理全局变量
+          }
+          s.onload = s.onerror = null; s.remove();
+          resolve(result);
+        };
+        s.onload = finish;
+        s.onerror = () => { if (!done) { done = true; s.remove(); resolve({}); } };
+        s.src = 'https://qt.gtimg.cn/q=' + all;
+        document.head.appendChild(s);
+        setTimeout(finish, 4000); // 超时兜底
+      });
+    }
+
+    // ---------- 日K：fetch fqkline（前复权，拉取 30 根确保覆盖） ----------
+    // 返回 { d20Pct, ma20 }：20日涨跌幅 + 20日均线
+    async function fetchDayHistory(full, realtimePrice) {
+      const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${full},day,,,30,qfq`;
+      const resp = await fetch(url, { cache: 'no-store' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const json = await resp.json();
+      const sd = json && json.data && json.data[full];
+      if (!sd) throw new Error('no data');
+      // 带 qfq 参数，返回 qfqday 字段（前复权日K）
+      const days = sd.qfqday || sd.day;
+      if (!days || days.length < 21) throw new Error('bars < 21');
+      // 20 个交易日前的收盘价：倒数第 21 根（如最新为第 N-1 根，则 20 天前为第 N-21 根）
+      const p0 = parseFloat(days[days.length - 21][2]);
+      // 最新价：优先使用盘中高精度实时价，兜底用日K最后一根收盘价
+      const p1 = (realtimePrice && realtimePrice > 0)
+        ? realtimePrice
+        : parseFloat(days[days.length - 1][2]);
+      if (!(p0 > 0)) throw new Error('invalid p0');
+      const d20Pct = (p1 - p0) / p0 * 100;
+      // MA20 = 最近20根收盘价均值（取最后20根 days.slice(-20)）
+      const recent20 = days.slice(-20);
+      let sum = 0;
+      for (let i = 0; i < recent20.length; i++) {
+        if (i === recent20.length - 1 && realtimePrice && realtimePrice > 0) {
+          sum += realtimePrice; // 最后一根（今日）使用实时价
+        } else {
+          sum += parseFloat(recent20[i][2]);
+        }
+      }
+      const ma20 = sum / 20;
+      return { d20Pct, ma20 };
+    }
+
+    // ---------- 主刷新流程 ----------
+    async function refresh() {
+      loading.value = true;
+      errorMsg.value = '';
+      notice.value = '';
+      // 重置（保留 name/price/dailyPct 待会覆盖）
+      for (const r of rows.value) {
+        r.d20Pct = null; r.d20Fallback = null; r.error = false;
+        r.iopv = null; r.premium = null;
+        r.bidAmt = null; r.askAmt = null;
+        r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null;
+      }
+
+      try {
+        // 步骤A：批量实时价（一次请求，含 IOPV、当日涨跌幅、f70）
+        const rt = await fetchRealtimeQuotes();
+
+        // 合并实时价（含 IOPV、溢价率、f70）
+        let rtOk = false;
+        if (rt && Object.keys(rt).length) {
+          rtOk = true;
+          for (const r of rows.value) {
+            const q = rt[r.code];
+            if (q) {
+              r.name = q.name;
+              r.price = q.price;
+              r.dailyPct = q.dailyPct;
+              r.iopv = q.iopv;
+              r.premium = q.premium;
+              r.bidAmt = q.bidAmt;
+              r.askAmt = q.askAmt;
+              r.d20Fallback = q.d70;
+            }
+          }
+        } else {
+          errorMsg.value = '实时价接口无返回（可能被网络拦截）';
+        }
+
+        // 步骤B：按模式计算 20 日涨跌幅
+        if (mode.value === 'f70') {
+          // f70 模式：直接用腾讯预计算的 20 日涨跌幅
+          for (const r of rows.value) {
+            if (r.d20Fallback !== null) {
+              r.d20Pct = r.d20Fallback;
+            } else {
+              r.error = true;
+            }
+          }
+        } else {
+          // kline 模式：并发拉前复权日K计算 20日涨跌幅 + BIAS20
+          await Promise.all(rows.value.map(async (r) => {
+            try {
+              const { d20Pct, ma20 } = await fetchDayHistory(r.full, r.price);
+              r.d20Pct = d20Pct;
+              r.ma20 = ma20;
+              // BIAS20 = (最新价 - MA20) / MA20 * 100，优先用实时价
+              const px = r.price || null;
+              if (ma20 > 0 && px > 0) {
+                r.bias20 = (px - ma20) / ma20 * 100;
+              }
+              // BIAS20=10% 时的目标价 = MA20 * 1.1；BIAS20=15% 时的目标价 = MA20 * 1.15
+              if (ma20 > 0) {
+                r.target10 = ma20 * 1.1;
+                r.target15 = ma20 * 1.15;
+              }
+            } catch (e) {
+              console.warn('[d20]', r.code, e.message);
+              r.d20Pct = null; r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null;
+              r.error = true;
+              // kline 模式失败时也用 f70 兜底，避免空白
+              if (r.d20Fallback !== null) {
+                r.d20Pct = r.d20Fallback;
+                r.error = false;
+              }
+            }
+          }));
+        }
+
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        lastUpdate.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      } catch (e) {
+        errorMsg.value = '刷新失败：' + e.message;
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    // 手工「刷新」按钮：仅交易时段才真正重新请求远程数据；
+    // 非交易时段不拉取，只提示当前为最近收盘数据（数据源不会变化，无需重复请求）
+    function manualRefresh() {
+      if (!isTradingTime()) {
+        notice.value = '当前非交易时段（A股 上午 9:30–11:30 / 下午 13:00–15:00），未重新请求数据，当前为最近一次收盘数据';
+        return;
+      }
+      notice.value = '';
+      refresh();
+    }
+
+    // 不做定时自动刷新；切回本 tab（后台→前台）时提取一次最新数据（含非交易时段）
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !loading.value) refresh();
+    });
+
+    onMounted(() => { refresh(); });
+
+    return { etfList, rows, sortedRows, columns, loading, lastUpdate, errorMsg, notice, sortBy,
+             mode, switchMode, refresh, manualRefresh, pctClass, fmtPct, cellText, cellColor, isWeedOut };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

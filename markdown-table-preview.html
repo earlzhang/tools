@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown 表格预览工具</title>
+    <link rel="icon" type="image/x-icon" href="favicon/tablefavicon/favicon.ico">
+    <link rel="icon" type="image/svg+xml" href="favicon/tablefavicon/favicon.svg">
+    <link rel="apple-touch-icon" href="favicon/tablefavicon/apple-touch-icon.png">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --cell-padding-y: 14px;
+            --cell-padding-x: 22px;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .column {
+            flex: 1;
+        }
+        .input-column {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .preview-column {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        .header {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            color: #003371;
+            margin-bottom: 10px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        textarea {
+            height: 400px;
+            resize: vertical;
+        }
+        label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .preview-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .first-col-control {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #666;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .first-col-control input {
+            width: 170px;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .preview-area {
+            width: 700px;
+            overflow-x: auto;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background-color: #fff;
+        }
+        
+        /* 用于复制时的无边框容器 */
+        .capture-container {
+            padding: 26px;
+            background-color: #fff;
+            border: none;
+            overflow: visible;
+            width: 700px; /* 固定宽度与预览区域一致 */
+            max-width: 700px;
+        }
+        button {
+            background-color: #222222;
+            color: #ffffff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s, transform 0.15s ease-in-out;
+        }
+        button:hover {
+            background-color: #ff385c;
+        }
+        .copy-success {
+            color: #28a745;
+            margin-left: 10px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .show {
+            opacity: 1;
+        }
+        
+        /* 表格样式 */
+        .table-wrapper {
+            border-radius: 0;
+            overflow: hidden;
+            background-color: transparent;
+            border: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-family: "Source Han Sans SC", "PingFang SC", "Airbnb Cereal VF", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-variant-numeric: tabular-nums;
+            color: #222222;
+            background-color: transparent;
+            margin: 0;
+            border: none;
+            border-radius: 0;
+            table-layout: fixed;
+        }
+        
+        th, td {
+            padding: var(--cell-padding-y) var(--cell-padding-x);
+            vertical-align: top;
+            word-wrap: break-word;
+            line-height: 1.35;
+        }
+        
+        /* 支持 Markdown 表格对齐语法，内联 style 优先级更高会自动覆盖 */
+        th[align="left"], td[align="left"] { text-align: left; }
+        th[align="center"], td[align="center"] { text-align: center; }
+        th[align="right"], td[align="right"] { text-align: right; }
+        
+        /* 默认左对齐（无 align 属性时） */
+        th:not([align]), td:not([align]) { text-align: left; }
+        
+        /* 第一列固定宽度 10em (完美容纳6个字) */
+        th:first-child, td:first-child {
+            font-weight: 600;
+        }
+
+        th {
+            background-color: #003371;
+            color: #ffffff;
+            font-weight: 600;
+            border-bottom: none;
+            border-top: none;
+        }
+
+        thead th {
+            border-bottom: 2px solid #002255;
+        }
+        
+        td {
+            color: #1e293b;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        /* 隔行变色 (蓝灰色高级斑马线) */
+        tr:nth-child(even) td {
+            background-color: #f4f6f9;
+        }
+        
+        /* 悬停效果 */
+        tr:hover td {
+            background-color: #e2e8f0;
+        }
+
+        /* 因为去除了外层卡片圆角，最后一行的底边框应当保留 */
+        tr:last-child td {
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        table caption {
+            caption-side: top;
+            font-size: 22px;
+            font-weight: 700 !important; /* 对齐 airbnb.css h2 的字重 */
+            color: #222222; /* 统一主字号颜色 */
+            letter-spacing: -0.44px;
+            padding: 2px 0 2px 12px;
+            text-align: left;
+            margin-bottom: 8px; /* 拉近标题与表格的距离 */
+            border-bottom: none;
+            border-left: 6px solid #ff385c; /* 统一使用 airbnb.css 的 Rausch Red */
+            line-height: 1.4; /* 对齐 h2 line-height */
+            position: relative;
+            font-family: "Source Han Sans SC", "PingFang SC", "Airbnb Cereal VF", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .source-signature {
+            text-align: right;
+            margin-top: 6px; /* 大幅拉近来源与表格底部的距离 */
+            margin-bottom: 8px;
+            margin-right: 0px; /* 因为表格变方正，无需内收对齐圆角 */
+            color: #999999; /* 与 airbnb.css 的 h6 caption 颜色完全一致，退去存在感 */
+            font-size: 11px; /* 压缩为极小的标注印记字号 */
+            font-weight: 400; /* 去除原本的加粗效应 */
+            letter-spacing: 1px;
+            font-family: "PingFang SC", "Source Han Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Markdown 表格预览工具</h1>
+        <p>在左侧输入 Markdown 表格代码，右侧实时预览渲染效果</p>
+    </div>
+    
+    <div class="container">
+        <div class="column input-column">
+            <div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                    <label for="table-header" style="margin-bottom: 0;">表格标题</label>
+                    <button id="save-md" style="font-size: 12px; padding: 4px 12px;">保存</button>
+                    <button id="load-md" style="font-size: 12px; padding: 4px 12px;">载入</button>
+                    <input type="file" id="load-file-input" accept=".md" style="display: none;">
+                </div>
+                <input type="text" id="table-header" placeholder="输入表格标题（可选）">
+            </div>
+            <div>
+                <label for="source-input">来源标记</label>
+                <input type="text" id="source-input" value="张翼轸@EarlETF" placeholder="输入来源标记">
+            </div>
+            <div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                    <label for="markdown-input" style="margin-bottom: 0;">Markdown 代码</label>
+                    <button id="paste-button" style="font-size: 12px; padding: 4px 12px;">粘贴</button>
+                </div>
+                <textarea id="markdown-input" placeholder="在此输入 Markdown 表格代码，例如：
+| 姓名 | 年龄 | 职业 |
+| ---- | ---- | ---- |
+| 张三 | 25 | 工程师 |
+| 李四 | 30 | 设计师 |"></textarea>
+            </div>
+        </div>
+        
+        <div class="column preview-column">
+            <div class="preview-header">
+                <h2>预览</h2>
+                <div class="preview-controls">
+                    <label class="first-col-control" for="col-widths-em">
+                        列宽(em)
+                        <input id="col-widths-em" type="text" value="" placeholder="例如：12,8,auto">
+                    </label>
+                    <label class="first-col-control" for="cell-padding-px">
+                        Padding(px)
+                        <input id="cell-padding-px" type="text" value="" placeholder="例如：14,18">
+                    </label>
+                    <button id="copy-image">复制为图片</button>
+                    <button id="download-image" style="margin-left: 10px;">下载</button>
+                    <span id="copy-success" class="copy-success">已复制到剪贴板！</span>
+                </div>
+            </div>
+            <div class="preview-area" id="preview-area"></div>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const tableHeader = document.getElementById('table-header');
+        const sourceInput = document.getElementById('source-input');
+        const markdownInput = document.getElementById('markdown-input');
+        const previewArea = document.getElementById('preview-area');
+        const colWidthsEmInput = document.getElementById('col-widths-em');
+        const cellPaddingPxInput = document.getElementById('cell-padding-px');
+        const copyButton = document.getElementById('copy-image');
+        const downloadButton = document.getElementById('download-image');
+        const copySuccess = document.getElementById('copy-success');
+
+        function parsePaddingPx(value) {
+            const raw = (value || '').trim();
+            if (!raw) {
+                return null;
+            }
+            const parts = raw.split(',').map(v => v.trim()).filter(Boolean);
+            if (parts.length === 0) {
+                return null;
+            }
+            const y = Number(parts[0]);
+            const x = Number(parts.length >= 2 ? parts[1] : parts[0]);
+            if (!Number.isFinite(y) || !Number.isFinite(x)) {
+                return null;
+            }
+            return {
+                y: Math.max(0, y),
+                x: Math.max(0, x)
+            };
+        }
+
+        function previewCellPaddingPx(value) {
+            const parsed = parsePaddingPx(value);
+            if (!parsed) {
+                return;
+            }
+            document.documentElement.style.setProperty('--cell-padding-y', `${parsed.y}px`);
+            document.documentElement.style.setProperty('--cell-padding-x', `${parsed.x}px`);
+        }
+
+        function commitCellPaddingPx(value) {
+            const raw = (value || '').trim();
+            const parsed = parsePaddingPx(raw);
+            if (!parsed) {
+                return;
+            }
+
+            const normalized = `${parsed.y},${parsed.x}`;
+            document.documentElement.style.setProperty('--cell-padding-y', `${parsed.y}px`);
+            document.documentElement.style.setProperty('--cell-padding-x', `${parsed.x}px`);
+            if (cellPaddingPxInput) {
+                cellPaddingPxInput.value = normalized;
+            }
+            try {
+                localStorage.setItem('markdown-table-preview:cell-padding-px', normalized);
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        function parseColWidthsEm(value) {
+            const raw = (value || '').trim();
+            if (!raw) {
+                return [];
+            }
+
+            return raw.split(',').map(part => {
+                const token = String(part).trim().toLowerCase();
+                if (!token || token === 'auto') {
+                    return null;
+                }
+                const num = Number(token);
+                if (!Number.isFinite(num) || num <= 0) {
+                    return null;
+                }
+                return `${num}em`;
+            });
+        }
+
+        function applyColWidthsToTable(table, widths) {
+            if (!table) {
+                return;
+            }
+
+            const hasAuto = widths.some(w => w == null);
+            table.style.tableLayout = hasAuto ? 'auto' : 'fixed';
+            table.style.width = '100%';
+
+            const colsCount = (() => {
+                const firstRow = table.querySelector('tr');
+                if (!firstRow) {
+                    return 0;
+                }
+                return firstRow.children.length;
+            })();
+
+            if (colsCount <= 0) {
+                return;
+            }
+
+            let colgroup = table.querySelector('colgroup');
+            if (!colgroup) {
+                colgroup = document.createElement('colgroup');
+                const caption = table.querySelector('caption');
+                if (caption && caption.nextSibling) {
+                    table.insertBefore(colgroup, caption.nextSibling);
+                } else {
+                    table.insertBefore(colgroup, table.firstChild);
+                }
+            }
+
+            while (colgroup.children.length < colsCount) {
+                colgroup.appendChild(document.createElement('col'));
+            }
+            while (colgroup.children.length > colsCount) {
+                colgroup.removeChild(colgroup.lastChild);
+            }
+
+            for (let i = 0; i < colsCount; i++) {
+                const col = colgroup.children[i];
+                const w = widths[i];
+                if (w) {
+                    col.style.width = w;
+                } else {
+                    col.style.width = '';
+                }
+            }
+        }
+
+        function applyColWidthsToPreview() {
+            const widths = parseColWidthsEm(colWidthsEmInput ? colWidthsEmInput.value : '');
+            const tables = previewArea.querySelectorAll('table');
+            tables.forEach(table => applyColWidthsToTable(table, widths));
+        }
+
+        function commitColWidthsEm(value) {
+            if (colWidthsEmInput) {
+                colWidthsEmInput.value = (value || '').trim();
+            }
+            applyColWidthsToPreview();
+            try {
+                localStorage.setItem('markdown-table-preview:col-widths-em', (value || '').trim());
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        (function initColWidths() {
+            let saved = '';
+            try {
+                saved = localStorage.getItem('markdown-table-preview:col-widths-em') || '';
+            } catch (e) {
+                saved = '';
+            }
+            if (colWidthsEmInput) {
+                colWidthsEmInput.value = saved;
+            }
+        })();
+
+        (function initCellPadding() {
+            let saved = '';
+            try {
+                saved = localStorage.getItem('markdown-table-preview:cell-padding-px') || '';
+            } catch (e) {
+                saved = '';
+            }
+            if (cellPaddingPxInput) {
+                cellPaddingPxInput.value = saved || '14,22';
+            }
+            commitCellPaddingPx(cellPaddingPxInput ? cellPaddingPxInput.value : '14,22');
+        })();
+        
+        // 设置默认示例
+        markdownInput.value = `| 姓名 | 年龄 | 职业 |
+| ---- | ---- | ---- |
+| 张三 | 25 | 工程师 |
+| 李四 | 30 | 设计师 |
+| 王五 | 28 | 产品经理 |`;
+        
+        // 初始渲染
+        renderMarkdown();
+        
+        // 监听输入变化
+        markdownInput.addEventListener('input', renderMarkdown);
+        tableHeader.addEventListener('input', renderMarkdown);
+        sourceInput.addEventListener('input', renderMarkdown);
+
+        if (colWidthsEmInput) {
+            colWidthsEmInput.addEventListener('input', () => {
+                applyColWidthsToPreview();
+            });
+            colWidthsEmInput.addEventListener('change', (e) => {
+                commitColWidthsEm(e.target.value);
+            });
+            colWidthsEmInput.addEventListener('blur', (e) => {
+                commitColWidthsEm(e.target.value);
+            });
+        }
+
+        if (cellPaddingPxInput) {
+            cellPaddingPxInput.addEventListener('input', (e) => {
+                previewCellPaddingPx(e.target.value);
+            });
+            cellPaddingPxInput.addEventListener('change', (e) => {
+                commitCellPaddingPx(e.target.value);
+            });
+            cellPaddingPxInput.addEventListener('blur', (e) => {
+                commitCellPaddingPx(e.target.value);
+            });
+        }
+        
+        // 粘贴按钮功能
+        document.getElementById('paste-button').addEventListener('click', async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                markdownInput.value = text;
+                renderMarkdown();
+            } catch (error) {
+                console.error('从剪贴板粘贴失败:', error);
+                alert('从剪贴板粘贴失败，请检查浏览器权限或使用现代浏览器。');
+            }
+        });
+        
+        // 渲染Markdown函数
+        function renderMarkdown() {
+            const markdown = markdownInput.value;
+            const header = tableHeader.value.trim();
+            
+            // 使用marked渲染Markdown
+            const html = marked.parse(markdown);
+            previewArea.innerHTML = html;
+            
+            // 如果有标题，添加表格标题
+            if (header) {
+                const tables = previewArea.querySelectorAll('table');
+                tables.forEach(table => {
+                    // 检查表格是否已有caption
+                    let caption = table.querySelector('caption');
+                    if (!caption) {
+                        // 创建新的caption元素
+                        caption = document.createElement('caption');
+                        caption.textContent = header;
+                        
+                        // 将caption插入到表格的第一个子元素位置
+                        table.insertBefore(caption, table.firstChild);
+                    } else {
+                        // 更新现有caption
+                        caption.textContent = header;
+                    }
+                });
+            }
+
+            // 为每个表格包裹外层容器，用于圆角/阴影/裁切
+            const tablesToWrap = previewArea.querySelectorAll('table');
+            tablesToWrap.forEach(table => {
+                const parent = table.parentElement;
+                if (parent && parent.classList.contains('table-wrapper')) {
+                    return;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.className = 'table-wrapper';
+                table.parentNode.insertBefore(wrapper, table);
+                wrapper.appendChild(table);
+            });
+
+            applyColWidthsToPreview();
+            
+            // 添加来源标记
+            const sourceText = sourceInput.value;
+            if (sourceText) {
+                const signature = document.createElement('div');
+                signature.className = 'source-signature';
+                signature.textContent = sourceText;
+                previewArea.appendChild(signature);
+            }
+        }
+        
+        // 生成Canvas的通用函数
+        async function getCanvasFromPreview() {
+            // 创建一个临时容器用于截图，保持与预览区域相同的样式
+            const tempContainer = document.createElement('div');
+            tempContainer.className = 'capture-container';
+            tempContainer.innerHTML = previewArea.innerHTML;
+            document.body.appendChild(tempContainer);
+            
+            // CSS 层已去除全局阴影圆角实现所见即所得，这里无需再特殊处理
+
+            // 获取表格元素并设置固定宽度
+            const tables = tempContainer.querySelectorAll('table');
+            tables.forEach(table => {
+                table.style.width = '100%';
+                applyColWidthsToTable(table, parseColWidthsEm(colWidthsEmInput ? colWidthsEmInput.value : ''));
+                // 移除导出图片时的外边框，避免出现细微杂边
+                table.style.border = 'none';
+            });
+            
+            // 使用html2canvas将临时容器转换为图片
+            const canvas = await html2canvas(tempContainer, {
+                backgroundColor: '#ffffff',
+                scale: 2, // 提高图片质量
+                width: 700 // 固定宽度与预览区域一致
+            });
+            
+            // 移除临时容器
+            document.body.removeChild(tempContainer);
+            return canvas;
+        }
+
+        // 复制为图片功能
+        copyButton.addEventListener('click', async () => {
+            try {
+                const canvas = await getCanvasFromPreview();
+                
+                // 将Canvas转换为Blob
+                canvas.toBlob(function(blob) {
+                    // 创建ClipboardItem对象
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    
+                    // 写入剪贴板
+                    navigator.clipboard.write([item]).then(() => {
+                        // 显示成功消息
+                        copySuccess.classList.add('show');
+                        setTimeout(() => {
+                            copySuccess.classList.remove('show');
+                        }, 2000);
+                    });
+                });
+            } catch (error) {
+                console.error('复制图片失败:', error);
+                alert('复制图片失败，请检查浏览器权限或使用现代浏览器。');
+            }
+        });
+
+        // 下载图片功能
+        downloadButton.addEventListener('click', async () => {
+            try {
+                const canvas = await getCanvasFromPreview();
+                
+                // 获取文件名
+                const header = tableHeader.value.trim();
+                let fileName;
+                
+                if (header) {
+                    fileName = `${header}.png`;
+                } else {
+                    const now = new Date();
+                    const pad = (n) => n.toString().padStart(2, '0');
+                    const timestamp = now.getFullYear() +
+                        pad(now.getMonth() + 1) +
+                        pad(now.getDate()) +
+                        pad(now.getHours()) +
+                        pad(now.getMinutes()) +
+                        pad(now.getSeconds());
+                    fileName = `${timestamp}.png`;
+                }
+                
+                // 创建下载链接
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch (error) {
+                console.error('下载图片失败:', error);
+                alert('下载图片失败，请重试。');
+            }
+        });
+
+        // 保存为 Markdown 文件
+        document.getElementById('save-md').addEventListener('click', () => {
+            const header = tableHeader.value.trim();
+            const markdown = markdownInput.value;
+            const source = sourceInput.value.trim();
+            const colWidths = colWidthsEmInput ? colWidthsEmInput.value.trim() : '';
+
+            const sections = [];
+            sections.push('<!-- title -->\n' + header + '\n<!-- /title -->');
+            sections.push('<!-- col-widths -->\n' + colWidths + '\n<!-- /col-widths -->');
+            sections.push('<!-- markdown -->\n' + markdown + '\n<!-- /markdown -->');
+            sections.push('<!-- source -->\n' + source + '\n<!-- /source -->');
+
+            const content = sections.join('\n\n');
+            const fileName = 'table' + (header || '未命名') + '.md';
+
+            const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+            const link = document.createElement('a');
+            link.download = fileName;
+            link.href = URL.createObjectURL(blob);
+            link.click();
+            URL.revokeObjectURL(link.href);
+        });
+
+        // 载入 Markdown 文件
+        const loadFileInput = document.getElementById('load-file-input');
+
+        document.getElementById('load-md').addEventListener('click', () => {
+            loadFileInput.click();
+        });
+
+        loadFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+
+                const titleMatch = text.match(/<!-- title -->\n([\s\S]*?)\n<!-- \/title -->/);
+                const colWidthsMatch = text.match(/<!-- col-widths -->\n([\s\S]*?)\n<!-- \/col-widths -->/);
+                const markdownMatch = text.match(/<!-- markdown -->\n([\s\S]*?)\n<!-- \/markdown -->/);
+                const sourceMatch = text.match(/<!-- source -->\n([\s\S]*?)\n<!-- \/source -->/);
+
+                if (titleMatch) tableHeader.value = titleMatch[1];
+                if (colWidthsMatch && colWidthsEmInput) colWidthsEmInput.value = (colWidthsMatch[1] || '').trim();
+                if (markdownMatch) markdownInput.value = markdownMatch[1];
+                if (sourceMatch) sourceInput.value = sourceMatch[1];
+
+                if (colWidthsMatch) {
+                    commitColWidthsEm(colWidthsMatch[1]);
+                } else if (colWidthsEmInput) {
+                    commitColWidthsEm(colWidthsEmInput.value);
+                }
+
+                renderMarkdown();
+            };
+            reader.readAsText(file);
+            // 重置 input 以便同一文件可再次载入
+            loadFileInput.value = '';
+        });
+    </script>
+</body>
+</html>

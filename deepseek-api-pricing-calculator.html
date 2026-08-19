@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeepSeek API 费用计算器</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.38/dist/vue.global.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+  </style>
+</head>
+<body class="bg-[#f5f6f7] text-[#0f1115] min-h-screen flex items-center justify-center p-4">
+  <div id="app" class="w-full max-w-2xl bg-white rounded-2xl shadow-[0_4px_12px_0_rgba(0,0,0,0.02),0_2px_8px_0_rgba(0,0,0,0.04)] overflow-hidden">
+    <div class="relative p-6 md:p-8 bg-gradient-to-br from-[#3964fe] to-[#5686fe] text-white">
+      <div class="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top_right,white,transparent_60%)]"></div>
+      <div class="relative flex items-center gap-4">
+        <div class="w-11 h-11 rounded-xl bg-white text-[#3964fe] flex items-center justify-center font-bold text-lg shadow-sm">DS</div>
+        <div>
+          <h1 class="text-2xl md:text-3xl font-bold">DeepSeek-V4 API 费用计算器</h1>
+          <p class="text-white/80 text-sm mt-0.5">（单位：¥ / 百万 Tokens）</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-6 md:p-8 grid gap-5">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-[#0f1115]">模型</span>
+          <select v-model="model" class="border border-[#e1e5ee] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#3964fe]/20 focus:border-[#3964fe] transition">
+            <option value="flash">DeepSeek-V4-Flash</option>
+            <option value="pro">DeepSeek-V4-Pro</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-[#0f1115]">时段</span>
+          <select v-model="period" class="border border-[#e1e5ee] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#3964fe]/20 focus:border-[#3964fe] transition">
+            <option value="idle">空闲时段</option>
+            <option value="peak">高峰时段</option>
+          </select>
+          <p class="text-xs text-[#81858c] mt-0.5">
+            高峰：北京时间 9:00-12:00、14:00-18:00，其余为空闲
+          </p>
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-[#0f1115]">输入（缓存命中）Token 数</span>
+          <input v-model.number="hitTokens" type="number" min="0" placeholder="0" class="border border-[#e1e5ee] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#3964fe]/20 focus:border-[#3964fe] transition" />
+          <span class="text-xs text-[#81858c]">{{ formatPrice(rates.hit) }} 元 / 百万 Tokens</span>
+        </label>
+
+        <label class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-[#0f1115]">输入（缓存未命中）Token 数</span>
+          <input v-model.number="missTokens" type="number" min="0" placeholder="0" class="border border-[#e1e5ee] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#3964fe]/20 focus:border-[#3964fe] transition" />
+          <span class="text-xs text-[#81858c]">{{ formatPrice(rates.miss) }} 元 / 百万 Tokens</span>
+        </label>
+
+        <label class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-[#0f1115]">输出 Token 数</span>
+          <input v-model.number="outTokens" type="number" min="0" placeholder="0" class="border border-[#e1e5ee] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#3964fe]/20 focus:border-[#3964fe] transition" />
+          <span class="text-xs text-[#81858c]">{{ formatPrice(rates.out) }} 元 / 百万 Tokens</span>
+        </label>
+      </div>
+
+      <div class="bg-[#3964fe] rounded-xl p-5 mt-2 text-white">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
+          <div class="flex justify-between md:block">
+            <span class="text-white/70">缓存命中费用</span>
+            <span class="font-semibold">{{ formatPrice(lineCosts.hit) }}</span>
+          </div>
+          <div class="flex justify-between md:block">
+            <span class="text-white/70">缓存未命中费用</span>
+            <span class="font-semibold">{{ formatPrice(lineCosts.miss) }}</span>
+          </div>
+          <div class="flex justify-between md:block">
+            <span class="text-white/70">输出费用</span>
+            <span class="font-semibold">{{ formatPrice(lineCosts.out) }}</span>
+          </div>
+        </div>
+        <div class="border-t border-white/20 pt-4 flex items-baseline justify-between">
+          <span class="text-base font-medium">预估总费用</span>
+          <span class="text-2xl font-bold">{{ formatPrice(totalCost) }}</span>
+        </div>
+      </div>
+
+      <p class="text-xs text-[#adb2b8]">
+        以上价格自 2026 年 8 月 17 日 00:00（北京时间）起生效。仅供估算，实际以账单为准。
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed } = Vue;
+
+    const PRICING = {
+      flash: {
+        idle: { hit: 0.05, miss: 1.5, out: 4.5 },
+        peak: { hit: 0.10, miss: 3.0, out: 9.0 }
+      },
+      pro: {
+        idle: { hit: 0.15, miss: 4.5, out: 13.5 },
+        peak: { hit: 0.30, miss: 9.0, out: 27.0 }
+      }
+    };
+
+    createApp({
+      setup() {
+        const model = ref('flash');
+        const period = ref('idle');
+        const hitTokens = ref(0);
+        const missTokens = ref(0);
+        const outTokens = ref(0);
+
+        const rates = computed(() => PRICING[model.value][period.value]);
+
+        const lineCosts = computed(() => ({
+          hit: hitTokens.value * rates.value.hit / 1_000_000,
+          miss: missTokens.value * rates.value.miss / 1_000_000,
+          out: outTokens.value * rates.value.out / 1_000_000
+        }));
+
+        const totalCost = computed(() => lineCosts.value.hit + lineCosts.value.miss + lineCosts.value.out);
+
+        const formatPrice = (value) => {
+          const num = Number(value) || 0;
+          return '¥' + num.toLocaleString('zh-CN', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+        };
+
+        return {
+          model,
+          period,
+          hitTokens,
+          missTokens,
+          outTokens,
+          rates,
+          lineCosts,
+          totalCost,
+          formatPrice
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

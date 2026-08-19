@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>财经链接整理工具</title>
+    <link rel="icon" href="favicon/link.ico" type="image/x-icon">
+    <style>
+        :root {
+            --palette-bg-primary: #ffffff;
+            --palette-text-primary: #222222;
+            --palette-text-secondary: #6a6a6a;
+            --palette-accent-core: #ff385c;
+            --palette-accent-dark: #e00b41;
+            --palette-border: #c1c1c1;
+            --palette-surface-light: #f2f2f2;
+            --shadow-card: rgba(0,0,0,0.02) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 6px, rgba(0,0,0,0.1) 0px 4px 8px;
+            --shadow-hover: rgba(0,0,0,0.08) 0px 4px 12px;
+        }
+
+        body {
+            font-family: 'Airbnb Cereal VF', Circular, -apple-system, system-ui, 'PingFang SC', 'Microsoft YaHei', Roboto, 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            background-color: var(--palette-bg-primary);
+            color: var(--palette-text-primary);
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+            gap: 32px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+        }
+        
+        .column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 250px;
+            flex: 1;
+            padding: 16px 20px;
+            border: 1px solid transparent;
+            border-radius: 20px;
+            resize: none;
+            font-size: 14px;
+            line-height: 1.6;
+            box-sizing: border-box;
+            font-family: inherit;
+            color: var(--palette-text-primary);
+            background-color: var(--palette-bg-primary);
+            box-shadow: var(--shadow-card);
+            transition: box-shadow 0.2s ease, border 0.2s ease;
+        }
+        
+        textarea:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px var(--palette-text-primary);
+        }
+        
+        textarea::placeholder {
+            color: var(--palette-text-secondary);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+        
+        button {
+            padding: 12px 24px;
+            background-color: var(--palette-text-primary);
+            color: var(--palette-bg-primary);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+        
+        button:hover {
+            background-color: var(--palette-accent-core);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        button:active {
+            transform: scale(0.96);
+        }
+        
+        button#processBtn, button#downloadBtn, button#tripleCopyBtn {
+            background-color: var(--palette-accent-core);
+        }
+        
+        button#processBtn:hover, button#downloadBtn:hover, button#tripleCopyBtn:hover {
+            background-color: var(--palette-accent-dark);
+        }
+
+        button#tripleCopyBtn:disabled {
+            background-color: var(--palette-text-secondary);
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        
+        h2 {
+            margin-top: 0;
+            margin-bottom: 24px;
+            color: var(--palette-text-primary);
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.44px;
+        }
+        
+        /* 自定义提醒样式 */
+        .toast {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translate(-50%, -20px);
+            background-color: var(--palette-text-primary);
+            color: var(--palette-bg-primary);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 1000;
+            box-shadow: var(--shadow-card);
+        }
+        
+        .toast.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, 0);
+        }
+
+        .info-group {
+            max-width: 1200px;
+            margin: 32px auto 0 auto;
+            padding: 24px;
+            background-color: var(--palette-bg-primary);
+            border-radius: 20px;
+            box-shadow: var(--shadow-card);
+            box-sizing: border-box;
+            width: 100%;
+        }
+        
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .info-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .info-row label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--palette-text-primary);
+            min-width: 40px;
+        }
+        
+        .info-row input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--palette-border);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            color: var(--palette-text-primary);
+            background-color: var(--palette-surface-light);
+            transition: all 0.2s ease;
+        }
+        
+        .info-row input:focus {
+            outline: none;
+            background-color: var(--palette-bg-primary);
+            box-shadow: 0 0 0 2px var(--palette-text-primary);
+            border-color: transparent;
+        }
+        
+        .info-row input::placeholder {
+            color: var(--palette-text-secondary);
+        }
+        
+        .info-row button {
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            background-color: var(--palette-surface-light);
+            color: var(--palette-text-primary);
+            border: 1px solid transparent;
+            box-shadow: none;
+        }
+        
+        .info-row button:hover {
+            background-color: var(--palette-bg-primary);
+            border-color: var(--palette-text-primary);
+            color: var(--palette-text-primary);
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="column">
+            <h2>输入内容</h2>
+            <textarea id="inputText" placeholder="请输入需要处理的内容..."></textarea>
+            <div class="button-group">
+                <button id="pasteBtn">粘贴</button>
+                <button id="processBtn">处理</button>
+            </div>
+        </div>
+        <div class="column">
+            <h2>处理结果</h2>
+            <textarea id="outputText" readonly></textarea>
+            <div class="button-group">
+                <button id="copyBtn">复制</button>
+                <button id="downloadBtn">下载</button>
+                <button id="tripleCopyBtn">一键三复制</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提取后的标题和链接信息区 -->
+    <div style="max-width: 1200px; margin: 32px auto 0 auto; padding: 0 20px;">
+        <div class="info-group" style="margin: 0; width: 100%;">
+            <div class="info-row">
+                <label>标题</label>
+                <button id="copyTitleBtn">复制</button>
+                <input type="text" id="extTitle" readonly placeholder="等待提取...">
+            </div>
+            <div class="info-row">
+                <label>链接</label>
+                <button id="copyLinkBtn">复制</button>
+                <input type="text" id="extLink" readonly placeholder="等待提取...">
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义提醒元素 -->
+    <div id="toast" class="toast">已复制到剪贴板</div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputText = document.getElementById('inputText');
+            const outputText = document.getElementById('outputText');
+            const pasteBtn = document.getElementById('pasteBtn');
+            const processBtn = document.getElementById('processBtn');
+            const copyBtn = document.getElementById('copyBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const extTitle = document.getElementById('extTitle');
+            const extLink = document.getElementById('extLink');
+            const copyTitleBtn = document.getElementById('copyTitleBtn');
+            const copyLinkBtn = document.getElementById('copyLinkBtn');
+            const tripleCopyBtn = document.getElementById('tripleCopyBtn');
+            
+            // 粘贴按钮功能
+            pasteBtn.addEventListener('click', async function() {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    inputText.value = text;
+                    processBtn.click(); // 自动触发处理按钮
+                } catch (err) {
+                    alert('无法访问剪贴板，请确保已授予权限或手动粘贴内容');
+                    console.error('粘贴失败: ', err);
+                }
+            });
+            
+            // 处理按钮功能
+            processBtn.addEventListener('click', function() {
+                const content = inputText.value;
+                const info = extractWechatInfo(content);
+                let processedContent = processLinks(content);
+                
+                // 在输出汇总的第一行加上文章标题
+                if (info.title) {
+                    processedContent = info.title + '\n' + processedContent;
+                }
+                
+                outputText.value = processedContent;
+                
+                // 提取标题和微信链接到显示框
+                extTitle.value = info.title;
+                extLink.value = info.link;
+            });
+            
+            // 提取信息函数
+            function extractWechatInfo(content) {
+                const lines = content.split('\n');
+                for (let i = 1; i < lines.length; i++) {
+                    const currentLine = lines[i].trim();
+                    if (currentLine.includes('mp.weixin.qq.com')) {
+                        const prevLine = lines[i-1].trim();
+                        if (prevLine && !prevLine.startsWith('http')) {
+                            return {
+                                title: prevLine,
+                                link: currentLine
+                            };
+                        }
+                    }
+                }
+                return { title: "", link: "" };
+            }
+            
+            // 显示提醒函数
+            function showToast(message) {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.classList.add('show');
+                
+                // 2秒后隐藏提醒
+                setTimeout(function() {
+                    toast.classList.remove('show');
+                }, 2000);
+            }
+            
+            // 复制按钮功能
+            copyBtn.addEventListener('click', async function() {
+                outputText.select();
+                try {
+                    await navigator.clipboard.writeText(outputText.value);
+                    showToast('已复制到剪贴板');
+                } catch (err) {
+                    showToast('复制失败，请手动复制');
+                    console.error('复制失败: ', err);
+                }
+            });
+
+            // 快捷复制标题
+            copyTitleBtn.addEventListener('click', async function() {
+                if (!extTitle.value) return;
+                try {
+                    await navigator.clipboard.writeText(extTitle.value);
+                    showToast('标题已复制');
+                } catch (err) {
+                    showToast('复制失败');
+                }
+            });
+
+            // 快捷复制链接
+            copyLinkBtn.addEventListener('click', async function() {
+                if (!extLink.value) return;
+                try {
+                    await navigator.clipboard.writeText(extLink.value);
+                    showToast('链接已复制');
+                } catch (err) {
+                    showToast('复制失败');
+                }
+            });
+
+            // 一键三复制：依次向剪贴板写入 1.右半边所有链接 2.微信链接 3.标题
+            // 每次复制之间留足时间，便于 Raycast 等剪贴板历史工具记录为独立条目，支持序列粘贴
+            tripleCopyBtn.addEventListener('click', async function() {
+                if (!outputText.value || !extLink.value || !extTitle.value) {
+                    showToast('请先点击"处理"，确保标题、链接和微信链接都已提取');
+                    return;
+                }
+
+                // 右半边 outputText 的首行是标题，第三步会单独复制标题，这里去掉首行只保留链接部分
+                let linksContent = outputText.value;
+                if (extTitle.value && linksContent.startsWith(extTitle.value + '\n')) {
+                    linksContent = linksContent.substring(extTitle.value.length + 1);
+                }
+                if (!linksContent) {
+                    showToast('没有可复制的链接内容');
+                    return;
+                }
+
+                const steps = [
+                    { text: linksContent, msg: '已复制 1/3：右半边所有链接' },
+                    { text: extLink.value, msg: '已复制 2/3：微信链接' },
+                    { text: extTitle.value, msg: '已复制 3/3：标题' }
+                ];
+
+                const originalText = tripleCopyBtn.textContent;
+                tripleCopyBtn.disabled = true;
+
+                try {
+                    for (let i = 0; i < steps.length; i++) {
+                        tripleCopyBtn.textContent = `复制中 ${i + 1}/${steps.length}...`;
+                        await navigator.clipboard.writeText(steps[i].text);
+                        showToast(steps[i].msg);
+                        // 每次复制后等待 1000ms，确保剪贴板历史工具能记录为独立条目
+                        if (i < steps.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                    }
+                    showToast('一键三复制完成，可在 Raycast 中序列粘贴');
+                } catch (err) {
+                    showToast('复制失败: ' + err.message);
+                    console.error('一键三复制失败: ', err);
+                } finally {
+                    tripleCopyBtn.disabled = false;
+                    tripleCopyBtn.textContent = originalText;
+                }
+            });
+
+            // 下载按钮功能
+            downloadBtn.addEventListener('click', function() {
+                const content = outputText.value;
+                if (!content) {
+                    alert('没有可下载的内容。');
+                    return;
+                }
+
+                const date = new Date();
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const formattedDate = `${year}-${month}-${day}`;
+                
+                // 使用相同逻辑提取标题
+                const info = extractWechatInfo(inputText.value);
+                const title = info.title;
+                
+                // 移除文件名中的不合法字符
+                const safeTitle = title.replace(/[\\/:*?"<>|]/g, "_");
+                const filename = `${formattedDate}${safeTitle}链接汇总.txt`;
+
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+            });
+            
+            // 链接处理逻辑
+            function processLinks(content) {
+                // 按行分割内容
+                const lines = content.split('\n');
+                
+                // 只保留http开头的网址行
+                const httpLines = lines.filter(line => line.trim().toLowerCase().startsWith('http'));
+                
+                // 为每行添加前缀和分类
+                const processedLinesWithCategory = httpLines.map(line => {
+                    const url = line.trim();
+                    
+                    // 定义网站前缀映射和排序优先级（按要求的顺序）
+                    const prefixMap = [
+                        { domain: 'mp.weixin.qq.com', prefix: '微信公众号: ', priority: 1 },  // 微信公众号
+                        { domain: 'xueqiu.com', prefix: '雪球: ', priority: 2 },           // 雪球
+                        { domain: '10jqka.com.cn', prefix: '同花顺: ', priority: 3 },     // 同花顺
+                        { domain: 'eastmoney.com', prefix: '东方财富网: ', priority: 4 }, // 东方财富网
+                        { domain: 'weibo.com', prefix: '微博: ', priority: 5 },           // 微博
+                        { domain: 'toutiao.com', prefix: '今日头条: ', priority: 6 },    // 今日头条
+                        { domain: '163.com', prefix: '网易号: ', priority: 7 },           // 网易号
+                        { domain: 'baidu.com', prefix: '百度百家号: ', priority: 8 },    // 百度百家号
+                        { domain: 'zhihu.com', prefix: '知乎: ', priority: 9 },          // 知乎
+                    ];
+                    
+                    // 查找匹配的前缀和优先级
+                    for (const item of prefixMap) {
+                        if (url.includes(item.domain)) {
+                            return {
+                                line: item.prefix + url,
+                                priority: item.priority
+                            };
+                        }
+                    }
+                    
+                    // 如果没有匹配的前缀，返回null
+                    return null;
+                }).filter(item => item !== null);
+                
+                // 根据优先级排序
+                processedLinesWithCategory.sort((a, b) => a.priority - b.priority);
+                
+                // 提取排序后的行
+                const processedLines = processedLinesWithCategory.map(item => item.line);
+                
+                // 将处理后的行连接起来
+                return processedLines.join('\n');
+            }
+        });
+    </script>
+</body>
+</html>

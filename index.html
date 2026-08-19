@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>张翼轸的小工具集</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.38/dist/vue.global.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #F4F7FB;
+      --surface: #FFFFFF;
+      --ink: #0E1B33;
+      --ink-2: #3A4A66;
+      --muted: #7A8AA8;
+      --line: #DCE5F2;
+      --accent: #2A5BD7;
+      --accent-deep: #16307A;
+      --accent-tint: #EAF1FE;
+      --font-display: "Fraunces", "PingFang SC", serif;
+      --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    html { -webkit-font-smoothing: antialiased; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      color: var(--ink);
+    }
+
+    /* 淡蓝工程网格纸纹理 — 仅 hero，极低不透明度，向下渐隐 */
+    .grid-paper {
+      background-image:
+        linear-gradient(to right, rgba(42, 91, 215, 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(42, 91, 215, 0.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+      -webkit-mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
+      mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
+    }
+
+    /* 入场动画：CSS @keyframes 自动完成，不依赖 JS */
+    .fade-up {
+      animation: fadeUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 工具行 hover：箭头平移 + 淡蓝底 */
+    .tool-row { transition: background-color 0.25s ease, transform 0.25s ease; }
+    .tool-row:hover { background-color: var(--accent-tint); transform: translateX(2px); }
+    .tool-row .arrow { transition: transform 0.25s ease, color 0.25s ease; }
+    .tool-row:hover .arrow { transform: translateX(4px); color: var(--accent); }
+
+    /* 键盘焦点可见 */
+    .tool-row:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+      background-color: var(--accent-tint);
+    }
+
+    /* reduced-motion 降级 */
+    @media (prefers-reduced-motion: reduce) {
+      .fade-up { animation: none; }
+      .tool-row, .tool-row .arrow { transition: none; }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+  <div id="app" class="flex-1 flex flex-col">
+
+    <!-- Hero -->
+    <header class="relative overflow-hidden border-b" style="border-color: var(--line)">
+      <div class="absolute inset-0 grid-paper pointer-events-none" aria-hidden="true"></div>
+
+      <div class="relative max-w-3xl mx-auto px-6 py-16 md:py-24 flex flex-col items-center text-center gap-5">
+        <!-- Avatar -->
+        <div class="fade-up" style="animation-delay: 0ms">
+          <div class="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden shadow-sm"
+               style="box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--bg), 0 0 0 8px rgba(42,91,215,0.2);">
+            <img src="earl.jpg" alt="张翼轸" class="w-full h-full object-cover" />
+          </div>
+        </div>
+
+        <!-- Name -->
+        <h1 class="fade-up text-4xl md:text-6xl font-extrabold tracking-tight"
+            style="color: var(--ink); animation-delay: 80ms">
+          张翼轸
+        </h1>
+
+        <!-- Tagline (Fraunces italic) -->
+        <p class="fade-up text-lg md:text-xl -mt-1"
+           style="font-family: var(--font-display); font-style: italic; color: var(--ink-2); animation-delay: 160ms">
+          A personal toolbox.
+        </p>
+
+        <!-- Divider + email -->
+        <div class="fade-up flex items-center gap-3 mt-2" style="animation-delay: 240ms">
+          <span class="h-px w-10" style="background: var(--line)"></span>
+          <a href="mailto:earlzhang@gmail.com"
+             class="text-sm transition-colors"
+             style="color: var(--muted)"
+             onmouseover="this.style.color='var(--accent)'"
+             onmouseout="this.style.color='var(--muted)'">
+            earlzhang@gmail.com
+          </a>
+          <span class="h-px w-10" style="background: var(--line)"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tools index -->
+    <main class="flex-1 max-w-3xl w-full mx-auto px-6 py-12 md:py-16">
+      <!-- Section label -->
+      <div class="fade-up flex items-baseline justify-between mb-6" style="animation-delay: 320ms">
+        <span class="uppercase tracking-[0.18em] text-xs" style="font-family: var(--font-display); color: var(--muted)">
+          Tools · 工具索引
+        </span>
+        <span class="text-sm" style="font-family: var(--font-display); color: var(--muted)">
+          {{ TOOLS.length }} 件
+        </span>
+      </div>
+
+      <!-- Tool list -->
+      <ul class="rounded-2xl border overflow-hidden" style="background: var(--surface); border-color: var(--line); box-shadow: 0 1px 2px rgba(14,27,51,0.04)">
+        <li v-for="(tool, i) in TOOLS" :key="tool.id"
+            class="fade-up border-b last:border-b-0"
+            :style="{ borderColor: 'var(--line)', animationDelay: (360 + i * 80) + 'ms' }">
+          <a :href="tool.status === 'live' ? tool.file : null"
+             :tabindex="tool.status === 'live' ? 0 : -1"
+             :aria-disabled="tool.status === 'soon'"
+             class="tool-row group flex items-center gap-4 md:gap-5 px-5 md:px-6 py-5"
+             :style="tool.status === 'soon' ? 'cursor: not-allowed; opacity: 0.5' : ''">
+
+            <!-- 序号 -->
+            <span class="text-sm w-6 shrink-0" style="font-family: var(--font-display); color: var(--muted)">
+              {{ String(i + 1).padStart(2, '0') }}
+            </span>
+
+            <!-- 身份色卡 -->
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="box-shadow: 0 0 0 1px rgba(0,0,0,0.05)"
+                  :style="{ backgroundColor: tool.accent }"
+                  :title="tool.title + ' 身份色'"></span>
+
+            <!-- 标题 + 描述 -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-base md:text-lg font-semibold truncate" style="color: var(--ink)">
+                  {{ tool.title }}
+                </span>
+                <span v-if="tool.status === 'soon'"
+                      class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+                      style="font-family: var(--font-display); background: var(--line); color: var(--muted)">
+                  soon
+                </span>
+              </div>
+              <p class="text-sm mt-0.5 truncate" style="color: var(--muted)">{{ tool.desc }}</p>
+            </div>
+
+            <!-- 分类 -->
+            <span class="hidden sm:inline-block text-xs shrink-0"
+                  style="font-family: var(--font-display); font-style: italic; color: var(--muted)">
+              {{ tool.category }}
+            </span>
+
+            <!-- 箭头 -->
+            <svg class="arrow w-5 h-5 shrink-0" style="color: var(--muted)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </a>
+        </li>
+      </ul>
+    </main>
+
+    <!-- Footer -->
+    <footer class="fade-up border-t" style="border-color: var(--line); animation-delay: 520ms">
+      <div class="max-w-3xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs" style="color: var(--muted)">
+        <span>© {{ year }} 张翼轸 · 用爱发电</span>
+        <span style="font-family: var(--font-display); font-style: italic">Built for the joy of small tools.</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    const { createApp, ref } = Vue;
+
+    // ─── 工具数据：新增工具只需在此追加一个对象 ───
+    // 字段：id / title / file / desc / category / accent / status('live'|'soon')
+    const TOOLS = [
+      {
+        id: 'deepseek-pricing',
+        title: 'DeepSeek API 费用计算器',
+        file: 'deepseek-api-pricing-calculator.html',
+        desc: '按模型与时段估算 DeepSeek API 的调用费用',
+        category: 'AI 计算',
+        accent: '#3964fe',
+        status: 'live',
+      },
+      {
+        id: 'chinese-text-formatter',
+        title: '中文文本整理器',
+        file: 'chinese-text-formatter.html',
+        desc: '引号标点、段落排版一键整理',
+        category: '文本',
+        accent: '#3B82F6',
+        status: 'live',
+      },
+      {
+        id: 'markdown-table-preview',
+        title: 'Markdown 表格预览',
+        file: 'markdown-table-preview.html',
+        desc: '实时预览并导出表格图片',
+        category: 'Markdown',
+        accent: '#003371',
+        status: 'live',
+      },
+      {
+        id: 'svg-visual-editor',
+        title: 'SVG 可视化编辑器',
+        file: 'svg-visual-editor.html',
+        desc: '拖拽编辑 SVG 元素与属性',
+        category: '图形',
+        accent: '#570df8',
+        status: 'live',
+      },
+    ];
+
+    createApp({
+      setup() {
+        const TOOLS_REF = ref(TOOLS);
+        const year = new Date().getFullYear();
+        return { TOOLS: TOOLS_REF, year };
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>
