@@ -203,7 +203,7 @@
     <p>· <b>BIAS20</b>（仅日K线模式）：乖离率 = (最新价 − MA20) / MA20 × 100%，MA20 为最近20日前复权收盘价均值</p>
     <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15</p>
     <p>· IOPV（腾讯 f78，仅 ETF 有值，盘中每 15 秒更新）用于计算溢价率 = (现价 − IOPV) / IOPV × 100%，不再单独展示</p>
-    <p>· <b>买一/卖一金额</b>：取腾讯实时盘口买一价×买一量、卖一价×卖一量（1手=100份），金额 = 价 × 量 × 100，以"万"为单位显示</p>
+    <p>· <b>近价买盘/近价卖盘</b>：以现价为中心，累加价格落在 [现价×0.999, 现价×1.001]（上下千分之一）区间内的所有挂单金额（买一~买五、卖一~卖五，1手=100份），金额 = Σ价×量×100，以"万"为单位显示；若五档全部落在千分之一内则全部计入</p>
     <p>· 当日涨跌幅、最新价、IOPV 均来自腾讯实时行情；默认按 20 日涨跌幅降序，点击表头可切换排序</p>
     <p>· <b>淡绿底纹</b>：20日涨跌幅 &lt; +1% 的标的视为绝对动量无趋势，予以剔除标记（仅视觉提示，不改变排序）</p>
     <p>· <b>刷新策略</b>：不做定时自动刷新；首次打开、切回本页（tab）时自动提取数据；手动「刷新」仅在交易时段（周一至周五 上午 9:30–11:30、下午 13:00–15:00）才会重新请求远程数据，非交易时段按刷新只提示、不重复拉取</p>
@@ -244,8 +244,8 @@ const ALL_COLUMNS = [
   { key: 'target10',   label: '10%目标价',    align: 'right', mono: true, klineOnly: true, format: v => v?.toFixed(3) },
   { key: 'target15',   label: '15%目标价',    align: 'right', mono: true, klineOnly: true, format: v => v?.toFixed(3) },
   { key: 'price',      label: '最新价',       align: 'right', mono: true, format: v => v?.toFixed(3) },
-  { key: 'bidAmt',     label: '买一金额',     align: 'right', mono: true, sortable: true, sortKey: 'bid', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
-  { key: 'askAmt',     label: '卖一金额',     align: 'right', mono: true, sortable: true, sortKey: 'ask', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
+  { key: 'bidAmt',     label: '近价买盘',     align: 'right', mono: true, sortable: true, sortKey: 'bid', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
+  { key: 'askAmt',     label: '近价卖盘',     align: 'right', mono: true, sortable: true, sortKey: 'ask', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
 ];
 // 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、溢价率、BIAS20、10%目标价、15%目标价、最新价、买一金额、卖一金额
 const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt'];
@@ -267,8 +267,8 @@ createApp({
       target15: null,       // BIAS20=15% 时的目标价 = ma20 * 1.15（仅 kline 模式）
       iopv: null,           // f78 IOPV（基金份额参考净值，盘中实时更新；保留用于算溢价率，不再单独展示）
       premium: null,        // 溢价率 = (price - iopv) / iopv
-      bidAmt: null,         // 买一金额 = 买一价 × 买一量 × 100（元）
-      askAmt: null,         // 卖一金额 = 卖一价 × 卖一量 × 100（元）
+      bidAmt: null,         // 近价买盘 = 现价×0.999 及以上所有买盘挂单金额累计（元）
+      askAmt: null,         // 近价卖盘 = 现价×1.001 及以下所有卖盘挂单金额累计（元）
       error: false,
     })));
     const rows = ref(etfList);
@@ -378,14 +378,25 @@ createApp({
             const d70 = d70Raw ? parseFloat(d70Raw) : null;
             // 溢价率 = (现价 - IOPV) / IOPV
             const premium = (iopv && iopv > 0 && price > 0) ? (price - iopv) / iopv * 100 : null;
-            // 买一/卖一：f[9]=买一价, f[10]=买一量(手), f[19]=卖一价, f[20]=卖一量(手)
+            // 近价买盘/卖盘：基于现价，累加价格落在 [price*0.999, price*1.001] 内的所有挂单金额
+            // 买盘字段 f[9..18]（买一~买五，价量交替），卖盘字段 f[19..28]（卖一~卖五，价量交替）
             // 金额 = 价 × 量 × 100（1手=100份）
-            const bidPrice = parseFloat(f[9]);
-            const bidVol = parseFloat(f[10]);
-            const askPrice = parseFloat(f[19]);
-            const askVol = parseFloat(f[20]);
-            const bidAmt = (bidPrice > 0 && bidVol > 0) ? bidPrice * bidVol * 100 : null;
-            const askAmt = (askPrice > 0 && askVol > 0) ? askPrice * askVol * 100 : null;
+            let bidAmt = null, askAmt = null;
+            if (price > 0) {
+              const bidLower = price * 0.999;   // 买盘价格下限
+              const askUpper = price * 1.001;   // 卖盘价格上限
+              let bidSum = 0, askSum = 0;
+              for (let i = 0; i < 5; i++) {
+                const bp = parseFloat(f[9 + i * 2]);
+                const bv = parseFloat(f[10 + i * 2]);
+                if (bp > 0 && bv > 0 && bp >= bidLower) bidSum += bp * bv * 100;
+                const ap = parseFloat(f[19 + i * 2]);
+                const av = parseFloat(f[20 + i * 2]);
+                if (ap > 0 && av > 0 && ap <= askUpper) askSum += ap * av * 100;
+              }
+              if (bidSum > 0) bidAmt = bidSum;
+              if (askSum > 0) askAmt = askSum;
+            }
             result[code] = { name, price, dailyPct, iopv, premium, d70, bidAmt, askAmt };
             delete window['v_' + full]; // 清理全局变量
           }
