@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="ETF 看板">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <!-- rounded tile -->
+  <rect x="0" y="0" width="128" height="128" rx="24" ry="24" fill="url(#bg)"/>
+  <!-- baseline -->
+  <line x1="18" y1="86" x2="110" y2="86" stroke="#334155" stroke-width="1.5" stroke-opacity="0.7"/>
+  <!-- candlesticks: x centers 28,46,64,82,100  bar_w=12 -->
+  <!-- bar1 green short -->
+  <line x1="28" y1="66" x2="28" y2="92" stroke="#16a34a" stroke-width="2" stroke-linecap="round"/>
+  <rect x="22" y="72" width="12" height="14" rx="2" fill="#16a34a"/>
+  <!-- bar2 red -->
+  <line x1="46" y1="52" x2="46" y2="94" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+  <rect x="40" y="58" width="12" height="28" rx="2" fill="#dc2626"/>
+  <!-- bar3 red med -->
+  <line x1="64" y1="60" x2="64" y2="93" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+  <rect x="58" y="66" width="12" height="20" rx="2" fill="#dc2626"/>
+  <!-- bar4 green short -->
+  <line x1="82" y1="70" x2="82" y2="92" stroke="#16a34a" stroke-width="2" stroke-linecap="round"/>
+  <rect x="76" y="74" width="12" height="12" rx="2" fill="#16a34a"/>
+  <!-- bar5 strong red -->
+  <line x1="100" y1="34" x2="100" y2="96" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+  <rect x="94" y="40" width="12" height="46" rx="2" fill="#dc2626"/>
+  <!-- ascending sparkline through bar tops -->
+  <polyline points="28,68 46,52 64,60 82,70 100,34"
+            fill="none" stroke="#f8fafc" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- latest price dot -->
+  <circle cx="100" cy="34" r="5.5" fill="#f59e0b"/>
+  <circle cx="100" cy="34" r="8.5" fill="none" stroke="#f59e0b" stroke-width="1.5" opacity="0.7"/>
+  <!-- near-price depth ticks -->
+  <rect x="30" y="108" width="14" height="5" rx="1" fill="#16a34a" opacity="0.85"/>
+  <rect x="46" y="108" width="10" height="5" rx="1" fill="#16a34a" opacity="0.65"/>
+  <rect x="58" y="108" width="6" height="5" rx="1" fill="#16a34a" opacity="0.45"/>
+  <rect x="72" y="108" width="14" height="5" rx="1" fill="#dc2626" opacity="0.85"/>
+  <rect x="88" y="108" width="10" height="5" rx="1" fill="#dc2626" opacity="0.65"/>
+  <rect x="100" y="108" width="6" height="5" rx="1" fill="#dc2626" opacity="0.45"/>
+</svg>
