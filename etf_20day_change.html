@@ -220,7 +220,7 @@ const { createApp, ref, reactive, computed, onMounted } = Vue;
 // 跟踪的 ETF 列表（纯代码，无市场前缀）
 const ETF_CODES = [
   '515220', '159866', '513110', '162411', '159915',
-  '159698', '159980', '159981', '159985', '588000', '513050', '518880',
+  '159698', '159980', '159981', '159985', '588000', '513050', '518880', '159518', '513350',
 ];
 
 // 代码 → 带市场前缀（5开头=沪市sh，1开头=深市sz）
@@ -249,10 +249,11 @@ const ALL_COLUMNS = [
   { key: 'price',      label: '最新价',       align: 'right', mono: true, format: v => v?.toFixed(3) },
   { key: 'bidAmt',     label: '近价买盘',     align: 'right', mono: true, sortable: true, sortKey: 'bid', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
   { key: 'askAmt',     label: '近价卖盘',     align: 'right', mono: true, sortable: true, sortKey: 'ask', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
+  { key: 'amount',     label: '成交额',       align: 'right', mono: true, sortable: true, sortKey: 'amt', format: v => v == null ? '—' : (v >= 10000 ? (v/10000).toFixed(2) + '亿' : v.toFixed(0) + '万') },
 ];
-// 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、溢价率、BIAS20、10%目标价、15%目标价、最新价、买一金额、卖一金额
-const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt'];
-const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt'];
+// 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、溢价率、BIAS20、10%目标价、15%目标价、最新价、买一金额、卖一金额、成交额
+const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt', 'amount'];
+const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt', 'amount'];
 
 createApp({
   setup() {
@@ -272,6 +273,7 @@ createApp({
       premium: null,        // 溢价率 = (price - iopv) / iopv
       bidAmt: null,         // 近价买盘 = 现价×0.999 及以上所有买盘挂单金额累计（元）
       askAmt: null,         // 近价卖盘 = 现价×1.001 及以下所有卖盘挂单金额累计（元）
+      amount: null,         // 成交额（万元，腾讯 f57 高精度字段）
       error: false,
     })));
     const rows = ref(etfList);
@@ -309,7 +311,7 @@ createApp({
 
     const sortedRows = computed(() => {
       const arr = [...rows.value];
-      const keyMap = { d20: 'd20Pct', daily: 'dailyPct', prem: 'premium', bias: 'bias20', bid: 'bidAmt', ask: 'askAmt' };
+      const keyMap = { d20: 'd20Pct', daily: 'dailyPct', prem: 'premium', bias: 'bias20', bid: 'bidAmt', ask: 'askAmt', amt: 'amount' };
       const key = keyMap[sortBy.value] || 'd20Pct';
       // 降序：有效值在前，null 在后
       arr.sort((a, b) => {
@@ -379,6 +381,9 @@ createApp({
             // f[70] = 20日涨跌幅（腾讯预计算，作为 fqkline 失败时的兜底）
             const d70Raw = f[70] || '';
             const d70 = d70Raw ? parseFloat(d70Raw) : null;
+            // f[57] = 成交额（万元，高精度）
+            const amtRaw = f[57] || f[37] || '';
+            const amount = amtRaw ? parseFloat(amtRaw) : null;
             // 溢价率 = (现价 - IOPV) / IOPV
             const premium = (iopv && iopv > 0 && price > 0) ? (price - iopv) / iopv * 100 : null;
             // 近价买盘/卖盘：基于现价，累加价格落在 [price*0.999, price*1.001] 内的所有挂单金额
@@ -400,7 +405,7 @@ createApp({
               if (bidSum > 0) bidAmt = bidSum;
               if (askSum > 0) askAmt = askSum;
             }
-            result[code] = { name, price, dailyPct, iopv, premium, d70, bidAmt, askAmt };
+            result[code] = { name, price, dailyPct, iopv, premium, d70, bidAmt, askAmt, amount };
             delete window['v_' + full]; // 清理全局变量
           }
           s.onload = s.onerror = null; s.remove();
@@ -458,6 +463,7 @@ createApp({
         r.d20Pct = null; r.d20Fallback = null; r.error = false;
         r.iopv = null; r.premium = null;
         r.bidAmt = null; r.askAmt = null;
+        r.amount = null;
         r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null;
       }
 
@@ -479,6 +485,7 @@ createApp({
               r.premium = q.premium;
               r.bidAmt = q.bidAmt;
               r.askAmt = q.askAmt;
+              r.amount = q.amount;
               r.d20Fallback = q.d70;
             }
           }
