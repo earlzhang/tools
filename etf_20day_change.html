@@ -175,8 +175,9 @@
         <tr v-for="r in sortedRows" :key="r.code"
             :class="['border-t border-slate-100 transition-colors', isWeedOut(r) ? 'weed-out' : 'hover:bg-slate-50']">
           <td v-for="col in columns" :key="col.key"
-              :class="[col.align === 'right' ? 'text-right' : 'text-left', col.mono ? 'font-mono' : '', cellColor(col, r)]"
-              class="px-4 py-3">
+              :class="[col.align === 'right' ? 'text-right' : 'text-left', col.mono ? 'font-mono' : '', cellColor(col, r), isCopyable(col) ? 'cursor-pointer hover:text-blue-600 hover:underline select-none' : '']"
+              class="px-4 py-3"
+              @click="isCopyable(col) && copyCell(r, col.key)">
             <template v-if="col.key === 'd20Pct' && r.error && r[col.key] === null">
               <span class="text-slate-400 font-normal text-xs">获取失败</span>
             </template>
@@ -201,10 +202,10 @@
 
   <!-- 说明 -->
   <div class="mt-4 text-xs text-slate-400 leading-relaxed">
-    <p>· <b>实时 f70 模式（默认）</b>：20日涨跌幅直接取腾讯实时接口 f70 字段，一次请求拿全部，速度快</p>
+    <p>· <b>实时 f70 模式（默认）</b>：20日涨跌幅直接取腾讯实时接口 f70 字段，一次请求拿全部，速度快；点击代码或名称列可复制「名称(代码)」到剪贴板</p>
     <p>· <b>日K线模式</b>：拉前复权日K（qfq），取倒数第21根（20交易日前）收盘价与最新价计算 20 日涨跌幅，可作交叉验证</p>
     <p>· <b>BIAS20</b>（仅日K线模式）：乖离率 = (最新价 − MA20) / MA20 × 100%，MA20 为最近20日前复权收盘价均值</p>
-    <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15</p>
+    <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15；点击价格可复制「名称 价格」到剪贴板</p>
     <p>· IOPV（腾讯 f78，仅 ETF 有值，盘中每 15 秒更新）用于计算溢价率 = (现价 − IOPV) / IOPV × 100%，不再单独展示</p>
     <p>· <b>近价买盘/近价卖盘</b>：以现价为中心，累加价格落在 [现价×0.999, 现价×1.001]（上下千分之一）区间内的所有挂单金额（买一~买五、卖一~卖五，1手=100份），金额 = Σ价×量×100，以"万"为单位显示；若五档全部落在千分之一内则全部计入</p>
     <p>· 当日涨跌幅、最新价、IOPV 均来自腾讯实时行情；默认按 20 日涨跌幅降序，点击表头可切换排序</p>
@@ -351,6 +352,51 @@ createApp({
     // 绝对动量择时剔除：20日涨跌幅 < +1% 的标的视为无趋势，加淡绿底纹标记
     function isWeedOut(r) {
       return r.d20Pct !== null && r.d20Pct !== undefined && r.d20Pct < 1;
+    }
+
+    // 判断某列是否可点击复制
+    // · 日K线模式：10%/15% 目标价列
+    // · 实时 f70 模式：代码、名称列
+    function isCopyable(col) {
+      if (mode.value === 'kline') return col.key === 'target10' || col.key === 'target15';
+      if (mode.value === 'f70') return col.key === 'code' || col.key === 'name';
+      return false;
+    }
+
+    // 复制单元格内容到剪贴板
+    // · 目标价列：格式 "名称 价格"
+    // · 代码/名称列：格式 "名称(代码)"
+    async function copyCell(r, key) {
+      let text = '';
+      if (key === 'target10' || key === 'target15') {
+        const v = r[key];
+        if (v === null || v === undefined) return;
+        text = `${r.name || r.code} ${v.toFixed(3)}`;
+      } else if (key === 'code' || key === 'name') {
+        if (!r.name || !r.code) return;
+        text = `${r.name}(${r.code})`;
+      } else {
+        return;
+      }
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // 兜底：textarea + execCommand（本地双击打开 file:// 时无 secure context）
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+        notice.value = `已复制：${text}`;
+        setTimeout(() => { if (notice.value === `已复制：${text}`) notice.value = ''; }, 2000);
+      } catch (e) {
+        notice.value = '复制失败：' + e.message;
+      }
     }
 
     // ---------- 实时价：script 注入 qt.gtimg.cn（绕过 CORS） ----------
@@ -562,7 +608,8 @@ createApp({
     onMounted(() => { refresh(); });
 
     return { etfList, rows, sortedRows, columns, loading, lastUpdate, errorMsg, notice, sortBy,
-             mode, switchMode, refresh, manualRefresh, pctClass, fmtPct, cellText, cellColor, isWeedOut };
+             mode, switchMode, refresh, manualRefresh, pctClass, fmtPct, cellText, cellColor, isWeedOut,
+             isCopyable, copyCell };
   }
 }).mount('#app');
 </script>
