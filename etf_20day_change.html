@@ -204,6 +204,7 @@
   <div class="mt-4 text-xs text-slate-400 leading-relaxed">
     <p>· <b>实时 f70 模式（默认）</b>：20日涨跌幅直接取腾讯实时接口 f70 字段，一次请求拿全部，速度快；点击代码或名称列可复制「名称(代码)」到剪贴板</p>
     <p>· <b>日K线模式</b>：拉前复权日K（qfq），取倒数第21根（20交易日前）收盘价与最新价计算 20 日涨跌幅，可作交叉验证</p>
+    <p>· <b>本周涨幅</b>（仅日K线模式）：以日K最后一根所属自然周的周一为分界，取日期早于该周一的最后一根日K收盘价（即上周最后一个交易日，因节假日可能是周几）作为基准，本周涨幅 = (最新价 − 基准价) / 基准价 × 100%</p>
     <p>· <b>BIAS20</b>（仅日K线模式）：乖离率 = (最新价 − MA20) / MA20 × 100%，MA20 为最近20日前复权收盘价均值</p>
     <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15；点击价格可复制「名称 价格」到剪贴板</p>
     <p>· IOPV（腾讯 f78，仅 ETF 有值，盘中每 15 秒更新）用于计算溢价率 = (现价 − IOPV) / IOPV × 100%，不再单独展示</p>
@@ -243,6 +244,7 @@ const ALL_COLUMNS = [
   { key: 'name',       label: '名称',         align: 'left' },
   { key: 'dailyPct',   label: '当日涨跌幅',   align: 'right', mono: true, pct: true, sortable: true, sortKey: 'daily' },
   { key: 'd20Pct',     label: '20日涨跌幅',   align: 'right', mono: true, pct: true, bold: true, sortable: true, sortKey: 'd20' },
+  { key: 'weekPct',    label: '本周涨幅',     align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'week' },
   { key: 'premium',    label: '溢价率',       align: 'right', mono: true, pct: true, sortable: true, sortKey: 'prem' },
   { key: 'bias20',     label: 'BIAS20',       align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'bias' },
   { key: 'target10',   label: '10%目标价',    align: 'right', mono: true, klineOnly: true, format: v => v?.toFixed(3) },
@@ -253,8 +255,8 @@ const ALL_COLUMNS = [
   { key: 'amount',     label: '成交额',       align: 'right', mono: true, sortable: true, sortKey: 'amt', format: v => v == null ? '—' : (v >= 10000 ? (v/10000).toFixed(2) + '亿' : v.toFixed(0) + '万') },
 ];
 // 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、溢价率、BIAS20、10%目标价、15%目标价、最新价、买一金额、卖一金额、成交额
-const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt', 'amount'];
-const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt', 'amount'];
+const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt', 'amount'];
+const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'target10', 'target15', 'price', 'bidAmt', 'askAmt', 'amount'];
 
 createApp({
   setup() {
@@ -266,6 +268,7 @@ createApp({
       dailyPct: null,
       d20Pct: null,
       d20Fallback: null,   // 腾讯 f70 兜底
+      weekPct: null,        // 本周涨幅 = (最新价 - 上周最后交易日收盘价) / 上周最后交易日收盘价 * 100（仅 kline 模式）
       ma20: null,           // 20日均线（仅 kline 模式）
       bias20: null,         // BIAS20 乖离率 = (price - ma20) / ma20 * 100（仅 kline 模式）
       target10: null,       // BIAS20=10% 时的目标价 = ma20 * 1.1（仅 kline 模式）
@@ -312,7 +315,7 @@ createApp({
 
     const sortedRows = computed(() => {
       const arr = [...rows.value];
-      const keyMap = { d20: 'd20Pct', daily: 'dailyPct', prem: 'premium', bias: 'bias20', bid: 'bidAmt', ask: 'askAmt', amt: 'amount' };
+      const keyMap = { d20: 'd20Pct', daily: 'dailyPct', prem: 'premium', bias: 'bias20', week: 'weekPct', bid: 'bidAmt', ask: 'askAmt', amt: 'amount' };
       const key = keyMap[sortBy.value] || 'd20Pct';
       // 降序：有效值在前，null 在后
       arr.sort((a, b) => {
@@ -466,7 +469,8 @@ createApp({
     }
 
     // ---------- 日K：fetch fqkline（前复权，拉取 30 根确保覆盖） ----------
-    // 返回 { d20Pct, ma20 }：20日涨跌幅 + 20日均线
+    // 返回 { d20Pct, ma20, weekPct }：20日涨跌幅 + 20日均线 + 本周涨幅
+    // 本周涨幅基准 = 上周最后一个交易日（通常为上周五）的收盘价
     async function fetchDayHistory(full, realtimePrice) {
       const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${full},day,,,30,qfq`;
       const resp = await fetch(url, { cache: 'no-store' });
@@ -496,7 +500,51 @@ createApp({
         }
       }
       const ma20 = sum / 20;
-      return { d20Pct, ma20 };
+
+      // 本周涨幅：基准 = 上周最后一个交易日的收盘价
+      // 计算上周五的日期（YYYY-MM-DD），然后在日K中找 ≤ 该日期的最后一根收盘价
+      const weekBase = findLastWeekClose(days);
+      let weekPct = null;
+      if (weekBase && weekBase > 0 && p1 > 0) {
+        weekPct = (p1 - weekBase) / weekBase * 100;
+      }
+      return { d20Pct, ma20, weekPct };
+    }
+
+    // 在日K数组中查找「上周最后一个交易日」的收盘价
+    // 算法：以「当前真实日期」所属自然周的周一为分界线（不依赖日K最后一根的日期，
+    //       否则今天为节假日时日K最后一根属于上周，分界线会算错），
+    //       日K中日期 < 本周周一的最后一根即为上周最后交易日。
+    //       无论上周因节假日提前到周几收市、还是本周第一个交易日不是周一（周一放假），
+    //       都能正确命中——分界线始终是自然周周一，日K中自然没有节假日的记录。
+    function findLastWeekClose(days) {
+      if (!days || days.length === 0) return null;
+      // 用当前真实日期计算本周一（而非日K最后一根的日期）
+      // getDay(): 0=周日, 1=周一, ..., 6=周六
+      const now = new Date();
+      const dow = now.getDay();
+      const mondayOffset = dow === 0 ? -6 : 1 - dow;
+      const thisMonday = new Date(now);
+      thisMonday.setDate(now.getDate() + mondayOffset);
+      const thisMondayStr = fmtDate(thisMonday);
+      // 日期 < 本周周一的最后一根日K = 上周最后交易日
+      let close = null;
+      for (let i = 0; i < days.length; i++) {
+        if (days[i][0] < thisMondayStr) {
+          close = parseFloat(days[i][2]);
+        } else {
+          break; // 后续都 >= 本周周一，提前退出
+        }
+      }
+      return close;
+    }
+
+    // Date → "YYYY-MM-DD"（本地时区）
+    function fmtDate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
     }
 
     // ---------- 主刷新流程 ----------
@@ -507,6 +555,7 @@ createApp({
       // 重置（保留 name/price/dailyPct 待会覆盖）
       for (const r of rows.value) {
         r.d20Pct = null; r.d20Fallback = null; r.error = false;
+        r.weekPct = null;
         r.iopv = null; r.premium = null;
         r.bidAmt = null; r.askAmt = null;
         r.amount = null;
@@ -553,9 +602,10 @@ createApp({
           // kline 模式：并发拉前复权日K计算 20日涨跌幅 + BIAS20
           await Promise.all(rows.value.map(async (r) => {
             try {
-              const { d20Pct, ma20 } = await fetchDayHistory(r.full, r.price);
+              const { d20Pct, ma20, weekPct } = await fetchDayHistory(r.full, r.price);
               r.d20Pct = d20Pct;
               r.ma20 = ma20;
+              r.weekPct = weekPct;
               // BIAS20 = (最新价 - MA20) / MA20 * 100，优先用实时价
               const px = r.price || null;
               if (ma20 > 0 && px > 0) {
@@ -568,7 +618,7 @@ createApp({
               }
             } catch (e) {
               console.warn('[d20]', r.code, e.message);
-              r.d20Pct = null; r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null;
+              r.d20Pct = null; r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null; r.weekPct = null;
               r.error = true;
               // kline 模式失败时也用 f70 兜底，避免空白
               if (r.d20Fallback !== null) {
