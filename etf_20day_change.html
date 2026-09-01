@@ -207,7 +207,10 @@
     <p>· <b>本周涨幅</b>（仅日K线模式）：以日K最后一根所属自然周的周一为分界，取日期早于该周一的最后一根日K收盘价（即上周最后一个交易日，因节假日可能是周几）作为基准，本周涨幅 = (最新价 − 基准价) / 基准价 × 100%</p>
     <p>· <b>BIAS20</b>（仅日K线模式）：乖离率 = (最新价 − MA20) / MA20 × 100%，MA20 为最近20日前复权收盘价均值</p>
     <p>· <b>BIAS40</b>（仅日K线模式）：乖离率 = (最新价 − MA40) / MA40 × 100%，MA40 为最近40日前复权收盘价均值</p>
-    <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15；<b>40-10%目标价</b>：基于40日均线，目标价 = MA40 × 1.1；点击价格可复制「名称 价格」到剪贴板</p>
+    <p>· <b>BIAS60</b>（仅日K线模式）：乖离率 = (最新价 − MA60) / MA60 × 100%，MA60 为最近60日前复权收盘价均值</p>
+    <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15；<b>40-10%目标价</b>：基于40日均线，目标价 = MA40 × 1.1；<b>60-20%目标价</b>：基于60日均线，目标价 = MA60 × 1.2；点击价格可复制「名称 价格」到剪贴板</p>
+    <p>· <b>目标价浅灰色</b>（仅日K线模式）：四个目标价中低于最新价的以浅灰色显示，表示当前价已突破该目标价</p>
+    <p>· <b>日K线模式列显示</b>：按 20 日涨跌幅降序排列，但不显示 20 日涨跌幅列和溢价率列</p>
     <p>· IOPV（腾讯 f78，仅 ETF 有值，盘中每 15 秒更新）用于计算溢价率 = (现价 − IOPV) / IOPV × 100%，不再单独展示</p>
     <p>· <b>近价买盘/近价卖盘</b>：以现价为中心，累加价格落在 [现价×0.999, 现价×1.001]（上下千分之一）区间内的所有挂单金额（买一~买五、卖一~卖五，1手=100份），金额 = Σ价×量×100，以"万"为单位显示；若五档全部落在千分之一内则全部计入</p>
     <p>· 当日涨跌幅、最新价、IOPV 均来自腾讯实时行情；默认按 20 日涨跌幅降序，点击表头可切换排序</p>
@@ -249,17 +252,19 @@ const ALL_COLUMNS = [
   { key: 'premium',    label: '溢价率',       align: 'right', mono: true, pct: true, sortable: true, sortKey: 'prem' },
   { key: 'bias20',     label: 'BIAS20',       align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'bias' },
   { key: 'bias40',     label: 'BIAS40',       align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'bias40' },
-  { key: 'target10',   label: '10%目标价',    align: 'right', mono: true, klineOnly: true, format: v => v?.toFixed(3) },
-  { key: 'target15',   label: '15%目标价',    align: 'right', mono: true, klineOnly: true, format: v => v?.toFixed(3) },
-  { key: 'target4010', label: '40-10%目标价', align: 'right', mono: true, klineOnly: true, format: v => v?.toFixed(3) },
+  { key: 'bias60',     label: 'BIAS60',       align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'bias60' },
+  { key: 'target10',   label: '10%目标价',    align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
+  { key: 'target15',   label: '15%目标价',    align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
+  { key: 'target4010', label: '40-10%目标价', align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
+  { key: 'target6020', label: '60-20%目标价', align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
   { key: 'price',      label: '最新价',       align: 'right', mono: true, format: v => v?.toFixed(3) },
   { key: 'bidAmt',     label: '近价买盘',     align: 'right', mono: true, sortable: true, sortKey: 'bid', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
   { key: 'askAmt',     label: '近价卖盘',     align: 'right', mono: true, sortable: true, sortKey: 'ask', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
   { key: 'amount',     label: '成交额',       align: 'right', mono: true, sortable: true, sortKey: 'amt', format: v => v == null ? '—' : (v >= 10000 ? (v/10000).toFixed(2) + '亿' : v.toFixed(0) + '万') },
 ];
-// 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、溢价率、BIAS20、BIAS40、10%目标价、15%目标价、40-10%目标价、最新价、买一金额、卖一金额、成交额
-const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'bias40', 'target10', 'target15', 'target4010', 'price', 'bidAmt', 'askAmt', 'amount'];
-const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'bias40', 'target10', 'target15', 'target4010', 'price', 'bidAmt', 'askAmt', 'amount'];
+// 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、本周涨幅、溢价率、BIAS20、BIAS40、BIAS60、10%目标价、15%目标价、40-10%目标价、60-20%目标价、最新价、买一金额、卖一金额、成交额
+const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'bias40', 'bias60', 'target10', 'target15', 'target4010', 'target6020', 'price', 'bidAmt', 'askAmt', 'amount'];
+const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'bias40', 'bias60', 'target10', 'target15', 'target4010', 'target6020', 'price', 'bidAmt', 'askAmt', 'amount'];
 
 createApp({
   setup() {
@@ -279,6 +284,9 @@ createApp({
       ma40: null,           // 40日均线（仅 kline 模式）
       bias40: null,         // BIAS40 乖离率 = (price - ma40) / ma40 * 100（仅 kline 模式）
       target4010: null,     // 基于40日均线、BIAS=10% 的目标价 = ma40 * 1.1（仅 kline 模式）
+      ma60: null,           // 60日均线（仅 kline 模式）
+      bias60: null,         // BIAS60 乖离率 = (price - ma60) / ma60 * 100（仅 kline 模式）
+      target6020: null,     // 基于60日均线、BIAS=20% 的目标价 = ma60 * 1.2（仅 kline 模式）
       iopv: null,           // f78 IOPV（基金份额参考净值，盘中实时更新；保留用于算溢价率，不再单独展示）
       premium: null,        // 溢价率 = (price - iopv) / iopv
       bidAmt: null,         // 近价买盘 = 现价×0.999 及以上所有买盘挂单金额累计（元）
@@ -305,12 +313,14 @@ createApp({
     }
 
     // 列顺序：移动端优先展示 20日涨跌幅、IOPV、溢价率；f70 模式隐藏 BIAS20（需日K）
+    // kline 模式隐藏 20日涨跌幅（仍按其排序）和溢价率列
     const columns = computed(() => {
       const order = isMobile.value ? MOBILE_ORDER : DESKTOP_ORDER;
       return order
         .map(k => ALL_COLUMNS.find(c => c.key === k))
         .filter(Boolean)
-        .filter(c => !(c.klineOnly && mode.value !== 'kline'));
+        .filter(c => !(c.klineOnly && mode.value !== 'kline'))
+        .filter(c => !(mode.value === 'kline' && (c.key === 'd20Pct' || c.key === 'premium' || c.key === 'bidAmt' || c.key === 'askAmt')));
     });
 
     function switchMode(m) {
@@ -321,7 +331,7 @@ createApp({
 
     const sortedRows = computed(() => {
       const arr = [...rows.value];
-      const keyMap = { d20: 'd20Pct', daily: 'dailyPct', prem: 'premium', bias: 'bias20', bias40: 'bias40', week: 'weekPct', bid: 'bidAmt', ask: 'askAmt', amt: 'amount' };
+      const keyMap = { d20: 'd20Pct', daily: 'dailyPct', prem: 'premium', bias: 'bias20', bias40: 'bias40', bias60: 'bias60', week: 'weekPct', bid: 'bidAmt', ask: 'askAmt', amt: 'amount' };
       const key = keyMap[sortBy.value] || 'd20Pct';
       // 降序：有效值在前，null 在后
       arr.sort((a, b) => {
@@ -354,8 +364,16 @@ createApp({
       return v;
     }
     // 单元格颜色（涨跌幅类列用红绿，其余默认）
+    // 四个目标价列：低于最新价的以浅灰色显示（表示已突破该目标价）
     function cellColor(col, r) {
       if (col.pct) return pctClass(r[col.key]);
+      if (col.target) {
+        const v = r[col.key];
+        const px = r.price;
+        if (v !== null && v !== undefined && px !== null && px !== undefined && v < px) {
+          return 'text-slate-300';
+        }
+      }
       return '';
     }
     // 绝对动量择时剔除：20日涨跌幅 < +1% 的标的视为无趋势，加淡绿底纹标记
@@ -364,10 +382,10 @@ createApp({
     }
 
     // 判断某列是否可点击复制
-    // · 日K线模式：10%/15%/40-10% 目标价列
+    // · 日K线模式：10%/15%/40-10%/60-20% 目标价列
     // · 实时 f70 模式：代码、名称列
     function isCopyable(col) {
-      if (mode.value === 'kline') return col.key === 'target10' || col.key === 'target15' || col.key === 'target4010';
+      if (mode.value === 'kline') return col.key === 'target10' || col.key === 'target15' || col.key === 'target4010' || col.key === 'target6020';
       if (mode.value === 'f70') return col.key === 'code' || col.key === 'name';
       return false;
     }
@@ -377,7 +395,7 @@ createApp({
     // · 代码/名称列：格式 "名称(代码)"
     async function copyCell(r, key) {
       let text = '';
-      if (key === 'target10' || key === 'target15' || key === 'target4010') {
+      if (key === 'target10' || key === 'target15' || key === 'target4010' || key === 'target6020') {
         const v = r[key];
         if (v === null || v === undefined) return;
         text = `${r.name || r.code} ${v.toFixed(3)}`;
@@ -474,11 +492,11 @@ createApp({
       });
     }
 
-    // ---------- 日K：fetch fqkline（前复权，拉取 60 根确保覆盖 MA40） ----------
-    // 返回 { d20Pct, ma20, ma40, weekPct }：20日涨跌幅 + 20/40日均线 + 本周涨幅
+    // ---------- 日K：fetch fqkline（前复权，拉取 80 根确保覆盖 MA60） ----------
+    // 返回 { d20Pct, ma20, ma40, ma60, weekPct }：20日涨跌幅 + 20/40/60日均线 + 本周涨幅
     // 本周涨幅基准 = 上周最后一个交易日（通常为上周五）的收盘价
     async function fetchDayHistory(full, realtimePrice) {
-      const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${full},day,,,60,qfq`;
+      const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${full},day,,,80,qfq`;
       const resp = await fetch(url, { cache: 'no-store' });
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const json = await resp.json();
@@ -487,7 +505,7 @@ createApp({
       // 带 qfq 参数，返回 qfqday 字段（前复权日K）
       const days = sd.qfqday || sd.day;
       if (!days || days.length < 21) throw new Error('bars < 21');
-      if (days.length < 40) throw new Error('bars < 40 (MA40 needs 40)');
+      if (days.length < 60) throw new Error('bars < 60 (MA60 needs 60)');
       // 20 个交易日前的收盘价：倒数第 21 根（如最新为第 N-1 根，则 20 天前为第 N-21 根）
       const p0 = parseFloat(days[days.length - 21][2]);
       // 最新价：优先使用盘中高精度实时价，兜底用日K最后一根收盘价
@@ -520,6 +538,18 @@ createApp({
       }
       const ma40 = sum40 / 40;
 
+      // MA60 = 最近60根收盘价均值（取最后60根 days.slice(-60)）
+      const recent60 = days.slice(-60);
+      let sum60 = 0;
+      for (let i = 0; i < recent60.length; i++) {
+        if (i === recent60.length - 1 && realtimePrice && realtimePrice > 0) {
+          sum60 += realtimePrice; // 最后一根（今日）使用实时价
+        } else {
+          sum60 += parseFloat(recent60[i][2]);
+        }
+      }
+      const ma60 = sum60 / 60;
+
       // 本周涨幅：基准 = 上周最后一个交易日的收盘价
       // 计算上周五的日期（YYYY-MM-DD），然后在日K中找 ≤ 该日期的最后一根收盘价
       const weekBase = findLastWeekClose(days);
@@ -527,7 +557,7 @@ createApp({
       if (weekBase && weekBase > 0 && p1 > 0) {
         weekPct = (p1 - weekBase) / weekBase * 100;
       }
-      return { d20Pct, ma20, ma40, weekPct };
+      return { d20Pct, ma20, ma40, ma60, weekPct };
     }
 
     // 在日K数组中查找「上周最后一个交易日」的收盘价
@@ -580,6 +610,7 @@ createApp({
         r.amount = null;
         r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null;
         r.ma40 = null; r.bias40 = null; r.target4010 = null;
+        r.ma60 = null; r.bias60 = null; r.target6020 = null;
       }
 
       try {
@@ -622,10 +653,11 @@ createApp({
           // kline 模式：并发拉前复权日K计算 20日涨跌幅 + BIAS20
           await Promise.all(rows.value.map(async (r) => {
             try {
-              const { d20Pct, ma20, ma40, weekPct } = await fetchDayHistory(r.full, r.price);
+              const { d20Pct, ma20, ma40, ma60, weekPct } = await fetchDayHistory(r.full, r.price);
               r.d20Pct = d20Pct;
               r.ma20 = ma20;
               r.ma40 = ma40;
+              r.ma60 = ma60;
               r.weekPct = weekPct;
               // BIAS20 = (最新价 - MA20) / MA20 * 100，优先用实时价
               const px = r.price || null;
@@ -645,10 +677,19 @@ createApp({
               if (ma40 > 0) {
                 r.target4010 = ma40 * 1.1;
               }
+              // BIAS60 = (最新价 - MA60) / MA60 * 100
+              if (ma60 > 0 && px > 0) {
+                r.bias60 = (px - ma60) / ma60 * 100;
+              }
+              // 基于60日均线、BIAS=20% 的目标价 = MA60 * 1.2
+              if (ma60 > 0) {
+                r.target6020 = ma60 * 1.2;
+              }
             } catch (e) {
               console.warn('[d20]', r.code, e.message);
               r.d20Pct = null; r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null;
-              r.ma40 = null; r.bias40 = null; r.target4010 = null; r.weekPct = null;
+              r.ma40 = null; r.bias40 = null; r.target4010 = null;
+              r.ma60 = null; r.bias60 = null; r.target6020 = null; r.weekPct = null;
               r.error = true;
               // kline 模式失败时也用 f70 兜底，避免空白
               if (r.d20Fallback !== null) {
