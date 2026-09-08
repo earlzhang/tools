@@ -384,11 +384,11 @@ createApp({
     }
 
     // 判断某列是否可点击复制
+    // · 代码、名称列：两种模式均可点击复制「名称(代码)」
     // · 日K线模式：10%/15%/40-10%/40-15%/60-20% 目标价列
-    // · 实时 f70 模式：代码、名称列
     function isCopyable(col) {
+      if (col.key === 'code' || col.key === 'name') return true;
       if (mode.value === 'kline') return col.key === 'target10' || col.key === 'target15' || col.key === 'target4010' || col.key === 'target4015' || col.key === 'target6020';
-      if (mode.value === 'f70') return col.key === 'code' || col.key === 'name';
       return false;
     }
 
