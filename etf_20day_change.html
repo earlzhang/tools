@@ -161,7 +161,7 @@
               :class="[col.align === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:bg-slate-200' : '']"
               class="px-4 py-3 font-medium"
               @click="col.sortable && (sortBy = col.sortKey)">
-            {{ col.label }} <span v-if="col.sortable && sortBy===col.sortKey">↕</span>
+            <span v-html="col.label"></span> <span v-if="col.sortable && sortBy===col.sortKey">↕</span>
           </th>
         </tr>
       </thead>
@@ -208,8 +208,8 @@
     <p>· <b>BIAS20</b>（仅日K线模式）：乖离率 = (最新价 − MA20) / MA20 × 100%，MA20 为最近20日前复权收盘价均值</p>
     <p>· <b>BIAS40</b>（仅日K线模式）：乖离率 = (最新价 − MA40) / MA40 × 100%，MA40 为最近40日前复权收盘价均值</p>
     <p>· <b>BIAS60</b>（仅日K线模式）：乖离率 = (最新价 − MA60) / MA60 × 100%，MA60 为最近60日前复权收盘价均值</p>
-    <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15；<b>40-10%目标价</b>：基于40日均线，目标价 = MA40 × 1.1；<b>60-20%目标价</b>：基于60日均线，目标价 = MA60 × 1.2；点击价格可复制「名称 价格」到剪贴板</p>
-    <p>· <b>目标价浅灰色</b>（仅日K线模式）：四个目标价中低于最新价的以浅灰色显示，表示当前价已突破该目标价</p>
+    <p>· <b>10%/15% 目标价</b>（仅日K线模式）：令 BIAS20 = 10%/15% 反推价格，目标价 = MA20 × 1.1 / MA20 × 1.15；<b>40-10%目标价</b>：基于40日均线，目标价 = MA40 × 1.1；<b>40-15%目标价</b>：基于40日均线，目标价 = MA40 × 1.15；<b>60-20%目标价</b>：基于60日均线，目标价 = MA60 × 1.2；点击价格可复制「名称 价格」到剪贴板</p>
+    <p>· <b>目标价浅灰色</b>（仅日K线模式）：五个目标价中低于最新价的以浅灰色显示，表示当前价已突破该目标价</p>
     <p>· <b>日K线模式列显示</b>：按 20 日涨跌幅降序排列，但不显示 20 日涨跌幅列和溢价率列</p>
     <p>· IOPV（腾讯 f78，仅 ETF 有值，盘中每 15 秒更新）用于计算溢价率 = (现价 − IOPV) / IOPV × 100%，不再单独展示</p>
     <p>· <b>近价买盘/近价卖盘</b>：以现价为中心，累加价格落在 [现价×0.999, 现价×1.001]（上下千分之一）区间内的所有挂单金额（买一~买五、卖一~卖五，1手=100份），金额 = Σ价×量×100，以"万"为单位显示；若五档全部落在千分之一内则全部计入</p>
@@ -253,18 +253,19 @@ const ALL_COLUMNS = [
   { key: 'bias20',     label: 'BIAS20',       align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'bias' },
   { key: 'bias40',     label: 'BIAS40',       align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'bias40' },
   { key: 'bias60',     label: 'BIAS60',       align: 'right', mono: true, pct: true, klineOnly: true, sortable: true, sortKey: 'bias60' },
-  { key: 'target10',   label: '10%目标价',    align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
-  { key: 'target15',   label: '15%目标价',    align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
-  { key: 'target4010', label: '40-10%目标价', align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
-  { key: 'target6020', label: '60-20%目标价', align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
+  { key: 'target10',   label: '10%<br>目标价',    align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
+  { key: 'target15',   label: '15%<br>目标价',    align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
+  { key: 'target4010', label: '40-10%<br>目标价', align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
+  { key: 'target4015', label: '40-15%<br>目标价', align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
+  { key: 'target6020', label: '60-20%<br>目标价', align: 'right', mono: true, klineOnly: true, target: true, format: v => v?.toFixed(3) },
   { key: 'price',      label: '最新价',       align: 'right', mono: true, format: v => v?.toFixed(3) },
   { key: 'bidAmt',     label: '近价买盘',     align: 'right', mono: true, sortable: true, sortKey: 'bid', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
   { key: 'askAmt',     label: '近价卖盘',     align: 'right', mono: true, sortable: true, sortKey: 'ask', format: v => v == null ? '—' : (v/10000).toFixed(2) + '万' },
   { key: 'amount',     label: '成交额',       align: 'right', mono: true, sortable: true, sortKey: 'amt', format: v => v == null ? '—' : (v >= 10000 ? (v/10000).toFixed(2) + '亿' : v.toFixed(0) + '万') },
 ];
-// 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、本周涨幅、溢价率、BIAS20、BIAS40、BIAS60、10%目标价、15%目标价、40-10%目标价、60-20%目标价、最新价、买一金额、卖一金额、成交额
-const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'bias40', 'bias60', 'target10', 'target15', 'target4010', 'target6020', 'price', 'bidAmt', 'askAmt', 'amount'];
-const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'bias40', 'bias60', 'target10', 'target15', 'target4010', 'target6020', 'price', 'bidAmt', 'askAmt', 'amount'];
+// 桌面/移动列顺序一致：代码、名称、当日涨跌幅、20日涨跌幅、本周涨幅、溢价率、BIAS20、BIAS40、BIAS60、10%目标价、15%目标价、40-10%目标价、40-15%目标价、60-20%目标价、最新价、买一金额、卖一金额、成交额
+const DESKTOP_ORDER = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'bias40', 'bias60', 'target10', 'target15', 'target4010', 'target4015', 'target6020', 'price', 'bidAmt', 'askAmt', 'amount'];
+const MOBILE_ORDER  = ['code', 'name', 'dailyPct', 'd20Pct', 'weekPct', 'premium', 'bias20', 'bias40', 'bias60', 'target10', 'target15', 'target4010', 'target4015', 'target6020', 'price', 'bidAmt', 'askAmt', 'amount'];
 
 createApp({
   setup() {
@@ -284,6 +285,7 @@ createApp({
       ma40: null,           // 40日均线（仅 kline 模式）
       bias40: null,         // BIAS40 乖离率 = (price - ma40) / ma40 * 100（仅 kline 模式）
       target4010: null,     // 基于40日均线、BIAS=10% 的目标价 = ma40 * 1.1（仅 kline 模式）
+      target4015: null,     // 基于40日均线、BIAS=15% 的目标价 = ma40 * 1.15（仅 kline 模式）
       ma60: null,           // 60日均线（仅 kline 模式）
       bias60: null,         // BIAS60 乖离率 = (price - ma60) / ma60 * 100（仅 kline 模式）
       target6020: null,     // 基于60日均线、BIAS=20% 的目标价 = ma60 * 1.2（仅 kline 模式）
@@ -382,10 +384,10 @@ createApp({
     }
 
     // 判断某列是否可点击复制
-    // · 日K线模式：10%/15%/40-10%/60-20% 目标价列
+    // · 日K线模式：10%/15%/40-10%/40-15%/60-20% 目标价列
     // · 实时 f70 模式：代码、名称列
     function isCopyable(col) {
-      if (mode.value === 'kline') return col.key === 'target10' || col.key === 'target15' || col.key === 'target4010' || col.key === 'target6020';
+      if (mode.value === 'kline') return col.key === 'target10' || col.key === 'target15' || col.key === 'target4010' || col.key === 'target4015' || col.key === 'target6020';
       if (mode.value === 'f70') return col.key === 'code' || col.key === 'name';
       return false;
     }
@@ -395,7 +397,7 @@ createApp({
     // · 代码/名称列：格式 "名称(代码)"
     async function copyCell(r, key) {
       let text = '';
-      if (key === 'target10' || key === 'target15' || key === 'target4010' || key === 'target6020') {
+      if (key === 'target10' || key === 'target15' || key === 'target4010' || key === 'target4015' || key === 'target6020') {
         const v = r[key];
         if (v === null || v === undefined) return;
         text = `${r.name || r.code} ${v.toFixed(3)}`;
@@ -609,7 +611,7 @@ createApp({
         r.bidAmt = null; r.askAmt = null;
         r.amount = null;
         r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null;
-        r.ma40 = null; r.bias40 = null; r.target4010 = null;
+        r.ma40 = null; r.bias40 = null; r.target4010 = null; r.target4015 = null;
         r.ma60 = null; r.bias60 = null; r.target6020 = null;
       }
 
@@ -673,9 +675,10 @@ createApp({
                 r.target10 = ma20 * 1.1;
                 r.target15 = ma20 * 1.15;
               }
-              // 基于40日均线、BIAS=10% 的目标价 = MA40 * 1.1
+              // 基于40日均线、BIAS=10% 的目标价 = MA40 * 1.1；BIAS=15% 的目标价 = MA40 * 1.15
               if (ma40 > 0) {
                 r.target4010 = ma40 * 1.1;
+                r.target4015 = ma40 * 1.15;
               }
               // BIAS60 = (最新价 - MA60) / MA60 * 100
               if (ma60 > 0 && px > 0) {
@@ -688,7 +691,7 @@ createApp({
             } catch (e) {
               console.warn('[d20]', r.code, e.message);
               r.d20Pct = null; r.ma20 = null; r.bias20 = null; r.target10 = null; r.target15 = null;
-              r.ma40 = null; r.bias40 = null; r.target4010 = null;
+              r.ma40 = null; r.bias40 = null; r.target4010 = null; r.target4015 = null;
               r.ma60 = null; r.bias60 = null; r.target6020 = null; r.weekPct = null;
               r.error = true;
               // kline 模式失败时也用 f70 兜底，避免空白
