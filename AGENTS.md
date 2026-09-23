@@ -6,6 +6,7 @@
 
 - 线上地址：https://tools-9qk.pages.dev，并绑定自定义域名 https://tools.earlmind.com（Cloudflare Pages，绑定 GitHub 仓库 `earlzhang/tools`，push 到 main 自动部署）
 - 页面均为独立 HTML，可直接双击本地打开（前后端分离，无构建步骤）
+- `vendor/`：自托管三方库（`tailwind-browser.js` @4.3.3、`vue.global.min.js` @3.5.38、`echarts.min.js` @5.5.1），新页面默认引用本地 vendor 而非 CDN；升级时从 jsdelivr 下载对应版本替换文件即可
 - `hemingway-bench.html`：Hemingway Bench 榜单页（总榜 + 中国模型分榜 + 点击模型看排名走势），数据来自同源 `/api/history`，本地双击打开时自动回退 workers.dev 接口
 
 ## Cloudflare 服务清单
