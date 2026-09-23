@@ -1,3 +1,6 @@
 .DS_Store
 favicon/.DS_Store
 AGENTS.md
+.wrangler/
+cf-worker/.dev.vars
+cf-worker/node_modules

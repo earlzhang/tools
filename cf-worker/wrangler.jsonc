@@ -1,0 +1,20 @@
+{
+  "name": "hemingway-bench-watcher",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  // 每天 UTC 0:00 = 北京时间早上 8:00
+  "triggers": {
+    "crons": ["0 0 * * *"]
+  },
+  "vars": {
+    "NOTIFY_EMAIL": "earlzhang@163.com",
+    "FROM_EMAIL": "Hemingway Bench <bench@earlmind.com>"
+  },
+  "d1_databases": [
+    {
+      "binding": "hemingway_db",
+      "database_name": "hemingway-db",
+      "database_id": "9fb97d30-e101-4d23-8578-770067b2357e"
+    }
+  ]
+}
