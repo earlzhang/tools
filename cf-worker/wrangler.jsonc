@@ -2,6 +2,10 @@
   "name": "hemingway-bench-watcher",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
+  // 自定义域名路由：供静态站同源调用 /api/history（workers.dev 在部分地区网络不可直连）
+  "routes": [
+    { "pattern": "tools.earlmind.com/api/*", "zone_name": "earlmind.com" }
+  ],
   // 每天 UTC 0:00 = 北京时间早上 8:00
   "triggers": {
     "crons": ["0 0 * * *"]

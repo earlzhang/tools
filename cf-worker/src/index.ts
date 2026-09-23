@@ -320,6 +320,33 @@ async function runCheck(env: Env, forceEmail = false): Promise<CheckResult> {
   return { status: "changed", message: `首次运行，基线快照已保存（id=${snapshotId}）`, snapshotId, emailSent: true };
 }
 
+// ---------- 只读 API：全量历史快照（供静态页面展示走势） ----------
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+interface HistoryEntry extends Entry {
+  snapshot_id: number;
+}
+
+async function getHistory(db: D1Database): Promise<{ snapshots: { id: number; captured_at: string; entries: Omit<HistoryEntry, "snapshot_id">[] }[] }> {
+  const snaps = await db.prepare("SELECT id, captured_at FROM snapshots ORDER BY id ASC").all<Snapshot>();
+  const entries = await db
+    .prepare("SELECT snapshot_id, rank, brand, model, score, score_low, score_high FROM entries ORDER BY snapshot_id, rank")
+    .all<HistoryEntry>();
+  const bySnap = new Map<number, Omit<HistoryEntry, "snapshot_id">[]>();
+  for (const e of entries.results ?? []) {
+    const { snapshot_id, ...rest } = e;
+    if (!bySnap.has(snapshot_id)) bySnap.set(snapshot_id, []);
+    bySnap.get(snapshot_id)!.push(rest);
+  }
+  return {
+    snapshots: (snaps.results ?? []).map((s) => ({ id: s.id, captured_at: s.captured_at, entries: bySnap.get(s.id) ?? [] })),
+  };
+}
+
 export default {
   async scheduled(_event: unknown, env: Env): Promise<void> {
     try {
@@ -341,6 +368,20 @@ export default {
 
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+    if (url.pathname === "/api/history") {
+      try {
+        const data = await getHistory(env.hemingway_db);
+        return Response.json(data, { headers: CORS_HEADERS });
+      } catch (e) {
+        return Response.json(
+          { error: e instanceof Error ? e.message : String(e) },
+          { status: 500, headers: CORS_HEADERS }
+        );
+      }
+    }
     if (url.pathname === "/trigger") {
       if (url.searchParams.get("key") !== env.TRIGGER_SECRET) {
         return new Response("forbidden", { status: 403 });
