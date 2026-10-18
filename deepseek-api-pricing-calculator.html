@@ -22,7 +22,7 @@
       <div class="relative flex items-center gap-4">
         <div class="w-11 h-11 rounded-xl bg-white text-[#3964fe] flex items-center justify-center font-bold text-lg shadow-sm">DS</div>
         <div>
-          <h1 class="text-2xl md:text-3xl font-bold">DeepSeek-V4 API 费用计算器</h1>
+          <h1 class="text-2xl md:text-3xl font-bold">DeepSeek API 费用计算器</h1>
           <p class="text-white/80 text-sm mt-0.5">（单位：¥ / 百万 Tokens）</p>
         </div>
       </div>
@@ -33,8 +33,8 @@
         <label class="flex flex-col gap-1.5">
           <span class="text-sm font-medium text-[#0f1115]">模型</span>
           <select v-model="model" class="border border-[#e1e5ee] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#3964fe]/20 focus:border-[#3964fe] transition">
-            <option value="flash">DeepSeek-V4-Flash</option>
-            <option value="pro">DeepSeek-V4-Pro</option>
+            <option value="flash">deepseek-flash（V4.1-Flash）</option>
+            <option value="pro">deepseek-v4-pro</option>
           </select>
         </label>
 
@@ -45,7 +45,7 @@
             <option value="peak">高峰时段</option>
           </select>
           <p class="text-xs text-[#81858c] mt-0.5">
-            高峰：北京时间 9:00-12:00、14:00-18:00，其余为空闲
+            高峰：北京时间周一至周五 9:00-12:00、14:00-18:00（法定节假日除外），周末及其余时段为空闲
           </p>
         </label>
       </div>
@@ -92,7 +92,7 @@
       </div>
 
       <p class="text-xs text-[#adb2b8]">
-        以上价格自 2026 年 8 月 17 日 00:00（北京时间）起生效。仅供估算，实际以账单为准。
+        以上价格为官网最新价格（deepseek-flash 对应 DeepSeek-V4.1-Flash-1017，2026 年 10 月 17 日发布）。仅供估算，实际以账单为准。
       </p>
     </div>
   </div>
@@ -102,8 +102,8 @@
 
     const PRICING = {
       flash: {
-        idle: { hit: 0.05, miss: 1.5, out: 4.5 },
-        peak: { hit: 0.10, miss: 3.0, out: 9.0 }
+        idle: { hit: 0.02, miss: 1, out: 4 },
+        peak: { hit: 0.04, miss: 2, out: 8 }
       },
       pro: {
         idle: { hit: 0.15, miss: 4.5, out: 13.5 },
