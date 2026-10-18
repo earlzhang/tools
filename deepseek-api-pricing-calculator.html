@@ -47,6 +47,9 @@
           <p class="text-xs text-[#81858c] mt-0.5">
             高峰：北京时间周一至周五 9:00-12:00、14:00-18:00（法定节假日除外），周末及其余时段为空闲
           </p>
+          <p class="text-xs text-[#81858c]">
+            当前北京时间 {{ beijingTime }}，已自动选择，法定节假日未纳入判断
+          </p>
         </label>
       </div>
 
@@ -113,8 +116,18 @@
 
     createApp({
       setup() {
+        const nowBeijing = () => new Date(Date.now() + (8 * 60 + new Date().getTimezoneOffset()) * 60000);
+        const isPeakPeriod = (d) => {
+          const day = d.getDay();
+          const h = d.getHours() + d.getMinutes() / 60;
+          return day >= 1 && day <= 5 && ((h >= 9 && h < 12) || (h >= 14 && h < 18));
+        };
+        const bjNow = nowBeijing();
+        const beijingTime = bjNow.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+          + '（周' + '日一二三四五六'[bjNow.getDay()] + '）';
+
         const model = ref('flash');
-        const period = ref('idle');
+        const period = ref(isPeakPeriod(bjNow) ? 'peak' : 'idle');
         const hitTokens = ref(0);
         const missTokens = ref(0);
         const outTokens = ref(0);
@@ -137,6 +150,7 @@
         return {
           model,
           period,
+          beijingTime,
           hitTokens,
           missTokens,
           outTokens,
