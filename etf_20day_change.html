@@ -134,6 +134,15 @@
     </button>
   </div>
 
+  <!-- 仓位提示：11 票中 ≥7 票 20 日收益为负 → 半仓；≥9 票 → 0.25 仓 -->
+  <div v-if="positionHint" class="mb-4 rounded-lg bg-red-600 border-2 border-red-800 text-white px-4 py-3 shadow-lg flex items-center gap-3">
+    <span class="text-2xl leading-none animate-pulse">⚠️</span>
+    <div class="flex items-baseline gap-2">
+      <span class="font-bold text-base sm:text-lg">{{ positionHint.label }}</span>
+      <span class="text-xs text-red-200">负收益 {{ positionHint.count }}/11 票</span>
+    </div>
+  </div>
+
   <!-- 模式切换 + 最后更新时间 -->
   <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
     <div class="inline-flex rounded-lg border border-slate-200 bg-white overflow-hidden text-xs sm:text-sm">
@@ -216,6 +225,7 @@
     <p>· <b>近价买盘/近价卖盘</b>：以现价为中心，累加价格落在 [现价×0.999, 现价×1.001]（上下千分之一）区间内的所有挂单金额（买一~买五、卖一~卖五，1手=100份），金额 = Σ价×量×100，以"万"为单位显示；若五档全部落在千分之一内则全部计入</p>
     <p>· 当日涨跌幅、5日涨跌幅、最新价、IOPV 均来自腾讯实时行情；默认按 20 日涨跌幅降序，点击表头可切换排序</p>
     <p>· <b>淡绿底纹</b>：20日涨跌幅 &lt; +0.5% 或 5日涨跌幅 &lt; -5% 的标的视为绝对动量无趋势，予以剔除标记（仅视觉提示，不改变排序）</p>
+    <p>· <b>仓位提示</b>：创业板、科创50、中概互联、黄金、华宝油气、有色、豆粕、能源化工、可转债各计 1 票，纳指组（513110/513300）、日经组（513520/159866）各计 1 票（组内取 20 日涨跌幅更低者），共 11 票；20 日涨跌幅为负的票数 ≥7 时提示半仓，≥9 时提示 0.25 仓</p>
     <p>· <b>刷新策略</b>：不做定时自动刷新；首次打开、切回本页（tab）时自动提取数据；手动「刷新」仅在交易时段（周一至周五 上午 9:30–11:30、下午 13:00–15:00）才会重新请求远程数据，非交易时段按刷新只提示、不重复拉取</p>
     <p>· 手机端表格可横向滚动，列顺序与桌面端一致</p>
   </div>
@@ -228,6 +238,14 @@ const { createApp, ref, reactive, computed, onMounted } = Vue;
 const ETF_CODES = [
   '159866', '513110', '162411', '159915',
   '159980', '159981', '159985', '588000', '513050', '518880', '159518', '513300', '513350', '513520', '513330', '511380',
+];
+
+// 仓位信号计票：共 11 票。9 个独立品种各 1 票；纳指组/日经组各 1 票，组内取 20 日涨跌幅更低者
+const VOTE_GROUPS = [
+  ['159915'], ['588000'], ['513050'], ['518880'], ['162411'],
+  ['159980'], ['159985'], ['159981'], ['511380'],
+  ['513110', '513300'],   // 纳指组
+  ['513520', '159866'],   // 日经组
 ];
 
 // 代码 → 带市场前缀（5开头=沪市sh，1开头=深市sz）
@@ -387,6 +405,29 @@ createApp({
       const d5Drop = r.d5Pct !== null && r.d5Pct !== undefined && r.d5Pct < -5;
       return d20Flat || d5Drop;
     }
+
+    // 20日收益为负的票数（11 票，组内取最低值；数据缺失的不计负票）
+    const negVoteCount = computed(() => {
+      let n = 0;
+      for (const g of VOTE_GROUPS) {
+        let min = null;
+        for (const code of g) {
+          const r = rows.value.find(x => x.code === code);
+          const v = r ? r.d20Pct : null;
+          if (v !== null && v !== undefined && (min === null || v < min)) min = v;
+        }
+        if (min !== null && min < 0) n++;
+      }
+      return n;
+    });
+
+    // ≥7 票提示半仓（50%），≥9 票提示 0.25 仓（25%），否则不显示
+    const positionHint = computed(() => {
+      const n = negVoteCount.value;
+      if (n >= 9) return { count: n, label: '0.25 仓（25%）' };
+      if (n >= 7) return { count: n, label: '半仓（50%）' };
+      return null;
+    });
 
     // 判断某列是否可点击复制
     // · 代码、名称列：两种模式均可点击复制「名称(代码)」
@@ -747,7 +788,7 @@ createApp({
 
     return { etfList, rows, sortedRows, columns, loading, lastUpdate, errorMsg, notice, sortBy,
              mode, switchMode, refresh, manualRefresh, pctClass, fmtPct, cellText, cellColor, isWeedOut,
-             isCopyable, copyCell };
+             negVoteCount, positionHint, isCopyable, copyCell };
   }
 }).mount('#app');
 </script>
